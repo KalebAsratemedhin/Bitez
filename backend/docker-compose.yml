@@ -1,0 +1,99 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: bitz-postgres
+    environment:
+      POSTGRES_USER: bitz_user
+      POSTGRES_PASSWORD: bitz_password
+      POSTGRES_DB: bitz_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bitz-network
+
+  # RabbitMQ Message Queue
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: bitz-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - bitz-network
+
+  # Restaurants Service
+  restaurants:
+    build:
+      context: .
+      dockerfile: services/restaurants/Dockerfile
+    container_name: bitz-restaurants
+    environment:
+      - DEBUG=false
+      - ENVIRONMENT=development
+      - HOST=0.0.0.0
+      - PORT=8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - bitz-network
+
+  # Users Service
+  users:
+    build:
+      context: .
+      dockerfile: services/users/Dockerfile
+    container_name: bitz-users
+    environment:
+      - DEBUG=false
+      - ENVIRONMENT=development
+      - HOST=0.0.0.0
+      - PORT=8001
+    ports:
+      - "8001:8001"
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - bitz-network
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: bitz-api-gateway
+    environment:
+      - DEBUG=false
+      - ENVIRONMENT=development
+      - HOST=0.0.0.0
+      - PORT=8080
+      - CORS_ORIGINS=["http://localhost:3000","http://localhost:3001"]
+      - RESTAURANTS_SERVICE_URL=http://restaurants:8000
+      - USERS_SERVICE_URL=http://users:8001
+      - REQUEST_TIMEOUT=30.0
+    ports:
+      - "8080:8000"
+    depends_on:
+      - restaurants
+      - users
+    networks:
+      - bitz-network
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  bitz-network:
+    driver: bridge
