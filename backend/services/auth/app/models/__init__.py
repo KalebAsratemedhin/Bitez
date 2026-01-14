@@ -1,0 +1,1 @@
+"""Restaurants service database models."""
