@@ -1,1 +1,1 @@
-"""Restaurants service routes."""
+"""Authentication service routes."""

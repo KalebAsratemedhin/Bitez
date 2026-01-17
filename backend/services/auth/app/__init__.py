@@ -1,1 +1,1 @@
-"""Auth microservice application."""
+"""Authentication service application package."""

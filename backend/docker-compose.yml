@@ -29,44 +29,6 @@ services:
     networks:
       - bitz-network
 
-  # Restaurants Service
-  restaurants:
-    build:
-      context: .
-      dockerfile: services/restaurants/Dockerfile
-    container_name: bitz-restaurants
-    environment:
-      - DEBUG=false
-      - ENVIRONMENT=development
-      - HOST=0.0.0.0
-      - PORT=8000
-    ports:
-      - "8000:8000"
-    depends_on:
-      - postgres
-      - rabbitmq
-    networks:
-      - bitz-network
-
-  # Users Service
-  users:
-    build:
-      context: .
-      dockerfile: services/users/Dockerfile
-    container_name: bitz-users
-    environment:
-      - DEBUG=false
-      - ENVIRONMENT=development
-      - HOST=0.0.0.0
-      - PORT=8001
-    ports:
-      - "8001:8001"
-    depends_on:
-      - postgres
-      - rabbitmq
-    networks:
-      - bitz-network
-
   # Auth Service
   auth:
     build:
@@ -83,6 +45,8 @@ services:
       - JWT_ALGORITHM=HS256
       - JWT_ACCESS_TOKEN_EXPIRES_IN=3600
       - JWT_REFRESH_TOKEN_EXPIRES_IN=86400
+      - JWT_REFRESH_SECRET=super-secret-refresh-key
+      - JWT_REFRESH_EXPIRES_IN=86400
     ports:
       - "8002:8002"
     depends_on:
@@ -91,7 +55,8 @@ services:
     networks:
       - bitz-network
     volumes:
-      - ./backend/services/auth:/app
+      - ./services/auth:/app
+      - ./shared:/app/shared
 
   # API Gateway
   api-gateway:
@@ -105,14 +70,12 @@ services:
       - HOST=0.0.0.0
       - PORT=8080
       - CORS_ORIGINS=["http://localhost:3000","http://localhost:3001"]
-      - RESTAURANTS_SERVICE_URL=http://restaurants:8000
-      - USERS_SERVICE_URL=http://users:8001
+      - AUTH_SERVICE_URL=http://auth:8002
       - REQUEST_TIMEOUT=30.0
     ports:
       - "8080:8000"
     depends_on:
-      - restaurants
-      - users
+      - auth
     networks:
       - bitz-network
 

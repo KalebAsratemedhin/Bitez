@@ -1,9 +1,6 @@
-"""Database connection utilities using SQLAlchemy."""
-
 from contextlib import contextmanager
 from typing import Generator, Optional
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import QueuePool
 

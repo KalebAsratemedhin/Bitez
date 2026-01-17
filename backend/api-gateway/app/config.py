@@ -26,13 +26,9 @@ class Settings(BaseSettings):
     cors_allow_headers: List[str] = ["*"]
     
     # Service Discovery
-    restaurants_service_url: str = Field(
-        default="http://restaurants:8000",
-        env="RESTAURANTS_SERVICE_URL"
-    )
-    users_service_url: str = Field(
-        default="http://users:8001",
-        env="USERS_SERVICE_URL"
+    auth_service_url: str = Field(
+        default="http://auth:8002",
+        env="AUTH_SERVICE_URL"
     )
     
     # Timeouts

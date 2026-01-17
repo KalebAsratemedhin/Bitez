@@ -1,1 +1,1 @@
-"""Restaurants service business logic."""
+"""Business logic services for authentication."""

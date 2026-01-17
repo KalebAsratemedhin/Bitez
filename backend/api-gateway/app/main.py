@@ -10,7 +10,6 @@ from shared.exceptions import BitezException
 from app.config import settings
 from app.routes import health, proxy
 
-# Setup logging
 logger = setup_logging(
     service_name="api-gateway",
     log_level="DEBUG" if settings.debug else "INFO",
@@ -20,27 +19,22 @@ logger = setup_logging(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan events."""
-    # Startup
     logger.info("API Gateway starting up", extra={
         "version": settings.app_version,
         "environment": settings.environment
     })
     
-    # Initialize httpx client for proxy
     from app.routes.proxy import init_client
     init_client()
     
     yield
     
-    # Shutdown - close httpx client
     from app.routes.proxy import close_client
     await close_client()
     
     logger.info("API Gateway shutting down")
 
 
-# Create FastAPI app
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
@@ -48,7 +42,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -57,20 +50,18 @@ app.add_middleware(
     allow_headers=settings.cors_allow_headers,
 )
 
-# Request timing middleware
+
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
-    """Add request processing time to response headers."""
     start_time = time.time()
     response = await call_next(request)
     process_time = time.time() - start_time
     response.headers["X-Process-Time"] = str(process_time)
     return response
 
-# Logging middleware
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all incoming requests."""
     start_time = time.time()
     
     logger.info("Incoming request", extra={
@@ -91,10 +82,9 @@ async def log_requests(request: Request, call_next):
     
     return response
 
-# Exception handlers
+
 @app.exception_handler(BitezException)
 async def bitz_exception_handler(request: Request, exc: BitezException):
-    """Handle custom Bitez exceptions."""
     logger.error("Bitez exception", extra={
         "message": exc.message,
         "status_code": exc.status_code,
@@ -102,19 +92,13 @@ async def bitz_exception_handler(request: Request, exc: BitezException):
     })
     return JSONResponse(
         status_code=exc.status_code,
-        content={
-            "error": exc.message,
-            "details": exc.details
-        }
+        content={"error": exc.message, "details": exc.details}
     )
+
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """Handle general exceptions."""
-    logger.error("Unhandled exception", extra={
-        "error": str(exc),
-        "type": type(exc).__name__
-    })
+    logger.error("Unhandled exception", extra={"error": str(exc), "type": type(exc).__name__})
     return JSONResponse(
         status_code=500,
         content={
@@ -123,14 +107,13 @@ async def general_exception_handler(request: Request, exc: Exception):
         }
     )
 
-# Include routers
+
 app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(proxy.router, prefix="/api", tags=["api"])
 
 
 @app.get("/")
 async def root():
-    """Root endpoint."""
     return {
         "service": settings.app_name,
         "version": settings.app_version,
