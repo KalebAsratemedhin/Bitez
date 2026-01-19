@@ -18,16 +18,14 @@ class Settings(BaseSettings):
     
     jwt_secret: str = Field(
         default="change-me-in-production-secret-key-min-32-chars",
-        env="JWT_SECRET",
-        min_length=32
+        env="JWT_SECRET"
     )
     jwt_algorithm: str = Field(default="HS256", env="JWT_ALGORITHM")
     jwt_access_token_expires_in: int = Field(default=3600, env="JWT_ACCESS_TOKEN_EXPIRES_IN", gt=0)
     
     jwt_refresh_secret: str = Field(
         default="change-me-in-production-refresh-secret-key-min-32-chars",
-        env="JWT_REFRESH_SECRET",
-        min_length=32
+        env="JWT_REFRESH_SECRET"
     )
     jwt_refresh_token_expires_in: int = Field(default=604800, env="JWT_REFRESH_TOKEN_EXPIRES_IN", gt=0)
     
@@ -37,6 +35,20 @@ class Settings(BaseSettings):
     password_require_digits: bool = Field(default=True)
     password_require_special: bool = Field(default=False)
     bcrypt_rounds: int = Field(default=12, ge=10, le=15)
+    
+    @field_validator("jwt_secret")
+    @classmethod
+    def validate_jwt_secret(cls, v: str) -> str:
+        if len(v) < 32:
+            raise ValueError("JWT secret must be at least 32 characters long")
+        return v
+    
+    @field_validator("jwt_refresh_secret")
+    @classmethod
+    def validate_jwt_refresh_secret(cls, v: str) -> str:
+        if len(v) < 32:
+            raise ValueError("JWT refresh secret must be at least 32 characters long")
+        return v
     
     @field_validator("jwt_algorithm")
     @classmethod

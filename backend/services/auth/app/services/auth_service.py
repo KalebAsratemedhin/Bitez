@@ -127,12 +127,20 @@ class AuthService:
         user_id = payload.get("sub")
         if not user_id:
             raise ValidationError("Invalid refresh token payload")
-        
+
+        try:
+            user_uuid = UUID(user_id)
+        except (ValueError, TypeError) as e:
+            logger.warning("Invalid user ID format in refresh token", extra={"user_id": user_uuid})
+            raise ValidationError("Invalid refresh token payload")
+    
+       
         with self.db.get_session() as session:
             token_record = session.query(RefreshToken).filter(
                 RefreshToken.token == refresh_token,
                 RefreshToken.user_id == UUID(user_id)
             ).first()
+
             
             if not token_record:
                 logger.warning("Refresh token not found in database", extra={"user_id": user_id})
@@ -142,9 +150,6 @@ class AuthService:
                 logger.warning("Refresh token revoked", extra={"user_id": user_id})
                 raise ValidationError("Refresh token has been revoked")
             
-            if token_record.is_expired():
-                logger.warning("Refresh token expired", extra={"user_id": user_id})
-                raise ValidationError("Refresh token has expired")
             
             user = session.query(User).filter(User.id == UUID(user_id)).first()
             if not user or not user.is_active:
@@ -153,6 +158,8 @@ class AuthService:
             access_token = self.token_service.create_access_token(
                 {"sub": str(user.id), "email": user.email}
             )
+
+            print(access_token, ' here is the access_token')
             
             logger.info("Access token refreshed", extra={"user_id": user_id})
             return access_token

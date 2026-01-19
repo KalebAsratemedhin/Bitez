@@ -1,12 +1,17 @@
 *_PLAN.md
 *_GUIDE.md
+*_STATUS.md
 
 # Environment files
+.env.api-gateway.example
 .env
 .env.local
 .env.*.local
 **/.env
 **/.env.local
 **/.env.*.local
+# Service-specific environment files (exclude .example files)
+backend/.env.*
+!backend/.env.*.example
 
 **/.venv

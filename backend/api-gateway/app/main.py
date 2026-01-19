@@ -108,8 +108,8 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-app.include_router(health.router, prefix="/health", tags=["health"])
-app.include_router(proxy.router, prefix="/api", tags=["api"])
+# app.include_router(health.router, prefix="/health", tags=["health"])
+app.include_router(proxy.router, prefix="/api")
 
 
 @app.get("/")

@@ -35,18 +35,8 @@ services:
       context: .
       dockerfile: services/auth/Dockerfile
     container_name: bitz-auth
-    environment:
-      - DEBUG=false
-      - ENVIRONMENT=development
-      - HOST=0.0.0.0
-      - PORT=8002
-      - DATABASE_URL=postgresql://bitz_user:bitz_password@postgres:5432/bitz_db
-      - JWT_SECRET=super-secret-key
-      - JWT_ALGORITHM=HS256
-      - JWT_ACCESS_TOKEN_EXPIRES_IN=3600
-      - JWT_REFRESH_TOKEN_EXPIRES_IN=86400
-      - JWT_REFRESH_SECRET=super-secret-refresh-key
-      - JWT_REFRESH_EXPIRES_IN=86400
+    env_file:
+      - .env.auth
     ports:
       - "8002:8002"
     depends_on:
@@ -64,14 +54,8 @@ services:
       context: .
       dockerfile: api-gateway/Dockerfile
     container_name: bitz-api-gateway
-    environment:
-      - DEBUG=false
-      - ENVIRONMENT=development
-      - HOST=0.0.0.0
-      - PORT=8080
-      - CORS_ORIGINS=["http://localhost:3000","http://localhost:3001"]
-      - AUTH_SERVICE_URL=http://auth:8002
-      - REQUEST_TIMEOUT=30.0
+    env_file:
+      - .env.api-gateway
     ports:
       - "8080:8000"
     depends_on:

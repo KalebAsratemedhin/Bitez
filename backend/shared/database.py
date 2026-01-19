@@ -2,10 +2,9 @@ from contextlib import contextmanager
 from typing import Generator, Optional
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
-from sqlalchemy.pool import QueuePool
 
 from shared.logging import get_logger
-from shared.exceptions import DatabaseError
+from shared.exceptions import DatabaseError, ValidationError
 
 logger = get_logger("database")
 
@@ -23,7 +22,6 @@ class Database:
         self.database_url = database_url
         self.engine = create_engine(
             database_url,
-            pool_class=QueuePool,
             pool_size=pool_size,
             max_overflow=max_overflow,
             pool_pre_ping=pool_pre_ping,
@@ -57,6 +55,9 @@ class Database:
         try:
             yield session
             session.commit()
+        except ValidationError as e:
+            session.rollback()
+            raise e
         except Exception as e:
             session.rollback()
             logger.error("Database session error", extra={"error": str(e)})
