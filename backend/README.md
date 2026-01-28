@@ -12,15 +12,15 @@ This directory contains the backend microservices infrastructure for the Bitez f
        ▼
 ┌─────────────────┐
 │  API Gateway    │ (Port 8080)
-│  (FastAPI)      │
+│  (Nginx)        │
 └──────┬──────────┘
        │
        ├──────────────┐
        ▼              ▼
 ┌─────────────┐  ┌─────────────┐
-│ Restaurants │  │    Users    │
+│    Auth     │  │    Users    │
 │  Service    │  │   Service   │
-│ (Port 8000) │  │ (Port 8001) │
+│ (Port 8002) │  │ (Port 8003) │
 └─────────────┘  └─────────────┘
        │              │
        └──────┬───────┘
@@ -33,21 +33,25 @@ This directory contains the backend microservices infrastructure for the Bitez f
 
 ## Services
 
-### API Gateway (`api-gateway/`)
+### API Gateway (`nginx/`)
 - Single entry point for all client requests
-- Routes requests to appropriate microservices
-- Handles CORS, logging, and error handling
+- Nginx reverse proxy routing requests to microservices
+- Handles CORS, load balancing, and request proxying
 - Port: 8080
+- Swagger docs available through gateway: `/api/auth/docs`, `/api/users/docs`
 
-### Restaurants Service (`services/restaurants/`)
-- Minimal test service for restaurants
-- In-memory storage (for testing)
-- Port: 8000
+### Auth Service (`services/auth/`)
+- User authentication and authorization
+- JWT token management (access & refresh tokens)
+- User registration and login
+- Port: 8002
+- Direct Swagger docs: `http://localhost:8002/docs`
 
 ### Users Service (`services/users/`)
-- Minimal test service for users
-- In-memory storage (for testing)
-- Port: 8001
+- User profile management
+- Profile CRUD operations
+- Port: 8003
+- Direct Swagger docs: `http://localhost:8003/docs`
 
 ### Infrastructure
 - **PostgreSQL**: Database (Port 5432)
@@ -57,7 +61,7 @@ This directory contains the backend microservices infrastructure for the Bitez f
 
 ### Prerequisites
 - Docker and Docker Compose installed
-- Make sure ports 5432, 5672, 15672, 8000, 8001, 8080 are available
+- Make sure ports 5432, 5672, 15672, 8002, 8003, 8080 are available
 
 ### Running the Services
 
@@ -98,48 +102,50 @@ curl http://localhost:8080/health
 curl http://localhost:8080/
 ```
 
-### Restaurants Service (via Gateway)
+### Auth Service (via Gateway)
 ```bash
-# Get all restaurants
-curl http://localhost:8080/api/restaurants/restaurants
-
-# Get specific restaurant
-curl http://localhost:8080/api/restaurants/restaurants/1
-
-# Create restaurant
-curl -X POST http://localhost:8080/api/restaurants/restaurants \
+# Register a new user
+curl -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"name": "Test Restaurant", "city": "Test City", "cuisine": "Test"}'
+  -d '{"email": "user@example.com", "password": "SecurePass123!", "password_confirm": "SecurePass123!"}'
+
+# Login
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "SecurePass123!"}'
+
+# Get current user info (requires Bearer token)
+curl http://localhost:8080/api/auth/me \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 ### Users Service (via Gateway)
 ```bash
-# Get all users
-curl http://localhost:8080/api/users/users
+# Get user profile (requires Bearer token)
+curl http://localhost:8080/api/users/profiles/me \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 
-# Get specific user
-curl http://localhost:8080/api/users/users/1
-
-# Create user
-curl -X POST http://localhost:8080/api/users/users \
+# Create user profile (requires Bearer token)
+curl -X POST http://localhost:8080/api/users/profiles \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name": "Test User", "email": "test@example.com", "role": "customer"}'
+  -d '{"first_name": "John", "last_name": "Doe", "phone_number": "+1234567890"}'
 ```
 
-### Direct Service Access (for debugging)
-```bash
-# Restaurants service directly
-curl http://localhost:8000/restaurants
+### Swagger Documentation
 
-# Users service directly
-curl http://localhost:8001/users
-```
+Each service has its own Swagger documentation:
+
+- **Auth Service Docs (via Gateway)**: http://localhost:8080/api/auth/docs
+- **Auth Service Docs (Direct)**: http://localhost:8002/docs
+- **Users Service Docs (via Gateway)**: http://localhost:8080/api/users/docs
+- **Users Service Docs (Direct)**: http://localhost:8003/docs
 
 ## Service URLs
 
-- **API Gateway**: http://localhost:8080
-- **Restaurants Service**: http://localhost:8000
-- **Users Service**: http://localhost:8001
+- **API Gateway (Nginx)**: http://localhost:8080
+- **Auth Service**: http://localhost:8002
+- **Users Service**: http://localhost:8003
 - **RabbitMQ Management**: http://localhost:15672 (guest/guest)
 - **PostgreSQL**: localhost:5432 (bitz_user/bitz_password)
 
@@ -148,25 +154,27 @@ curl http://localhost:8001/users
 ### Project Structure
 ```
 backend/
-├── api-gateway/          # API Gateway service
+├── nginx/                # Nginx API Gateway configuration
+│   ├── nginx.conf        # Nginx configuration
+│   └── Dockerfile        # Nginx Dockerfile
 ├── services/
-│   ├── restaurants/      # Restaurants microservice
-│   └── users/            # Users microservice
+│   ├── auth/             # Authentication microservice
+│   └── users/            # Users/Profiles microservice
 ├── shared/               # Shared utilities
 │   ├── database.py       # Database utilities
 │   ├── messaging.py      # RabbitMQ utilities
 │   ├── logging.py        # Logging configuration
-│   └── exceptions.py    # Common exceptions
+│   └── exceptions.py     # Common exceptions
 └── docker-compose.yml    # Local development setup
 ```
 
 ### Adding a New Service
 
 1. Create service directory: `services/new-service/`
-2. Create minimal FastAPI app in `app/main.py`
+2. Create FastAPI app in `app/main.py` with Swagger docs enabled
 3. Add Dockerfile
 4. Add service to `docker-compose.yml`
-5. Add proxy route in `api-gateway/app/routes/proxy.py`
+5. Add upstream and location blocks in `nginx/nginx.conf`
 
 ## Next Steps
 

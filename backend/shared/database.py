@@ -60,7 +60,14 @@ class Database:
             raise e
         except Exception as e:
             session.rollback()
-            logger.error("Database session error", extra={"error": str(e)})
+            import traceback
+            tb = traceback.format_exc()
+            logger.error(
+                "Database session error: %s\n%s",
+                str(e),
+                tb,
+                extra={"error": str(e), "error_type": type(e).__name__, "traceback": tb},
+            )
             raise DatabaseError(f"Database operation failed: {str(e)}")
         finally:
             session.close()

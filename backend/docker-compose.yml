@@ -29,37 +29,52 @@ services:
     networks:
       - bitz-network
 
-  # Auth Service
-  auth:
+  users:
     build:
       context: .
-      dockerfile: services/auth/Dockerfile
-    container_name: bitz-auth
+      dockerfile: services/users/Dockerfile
+    container_name: bitz-users
     env_file:
-      - .env.auth
+      - .env
     ports:
-      - "8002:8002"
+      - "8003:8003"
     depends_on:
       - postgres
       - rabbitmq
     networks:
       - bitz-network
     volumes:
-      - ./services/auth:/app
+      - ./services/users:/app
       - ./shared:/app/shared
 
-  # API Gateway
+  restaurants:
+    build:
+      context: .
+      dockerfile: services/restaurants/Dockerfile
+    container_name: bitz-restaurants
+    env_file:
+      - .env
+    ports:
+      - "8004:8004"
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - bitz-network
+    volumes:
+      - ./services/restaurants:/app
+      - ./shared:/app/shared
+
   api-gateway:
     build:
       context: .
-      dockerfile: api-gateway/Dockerfile
+      dockerfile: nginx/Dockerfile
     container_name: bitz-api-gateway
-    env_file:
-      - .env.api-gateway
     ports:
-      - "8080:8000"
+      - "8080:8080"
     depends_on:
-      - auth
+      - users
+      - restaurants
     networks:
       - bitz-network
 
