@@ -65,6 +65,25 @@ services:
       - ./services/restaurants:/app
       - ./shared:/app/shared
 
+  orders:
+    build:
+      context: .
+      dockerfile: services/orders/Dockerfile
+    container_name: bitz-orders
+    env_file:
+      - .env
+    ports:
+      - "8005:8005"
+    depends_on:
+      - postgres
+      - rabbitmq
+      - restaurants
+    networks:
+      - bitz-network
+    volumes:
+      - ./services/orders:/app
+      - ./shared:/app/shared
+
   api-gateway:
     build:
       context: .
@@ -75,6 +94,7 @@ services:
     depends_on:
       - users
       - restaurants
+      - orders
     networks:
       - bitz-network
 

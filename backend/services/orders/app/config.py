@@ -3,12 +3,12 @@ from pydantic import Field, field_validator
 
 
 class Settings(BaseSettings):
-    app_name: str = "Bitez Restaurants Service"
+    app_name: str = "Bitez Orders Service"
     app_version: str = "1.0.0"
     debug: bool = Field(default=False, env="DEBUG")
     environment: str = Field(default="development", env="ENVIRONMENT")
-    host: str = Field(default="0.0.0.0", env="RESTAURANTS_HOST")
-    port: int = Field(default=8004, env="RESTAURANTS_PORT")
+    host: str = Field(default="0.0.0.0", env="ORDERS_HOST")
+    port: int = Field(default=8005, env="ORDERS_PORT")
     database_url: str = Field(
         default="postgresql://bitz_user:bitz_password@localhost:5432/bitz_db",
         env="DATABASE_URL"

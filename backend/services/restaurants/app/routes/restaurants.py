@@ -6,6 +6,7 @@ from shared.exceptions import NotFoundError, DatabaseError
 from app.schemas.restaurant import RestaurantCreate, RestaurantUpdate, RestaurantResponse
 from app.services.restaurant_service import RestaurantService
 from app.dependencies import get_current_user_id, require_restaurant_owner
+from app.events import publish_restaurant_created, publish_restaurant_updated, publish_restaurant_deleted
 
 logger = get_logger("restaurants.routes")
 
@@ -19,7 +20,9 @@ def create_restaurant(
     service: RestaurantService = Depends(lambda: RestaurantService()),
 ):
     try:
-        return service.create(owner_id, data)
+        out = service.create(owner_id, data)
+        publish_restaurant_created(out.owner_id, out.id, out.name, out.location, out.rating)
+        return out
     except DatabaseError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e.message)
 
@@ -58,7 +61,9 @@ def update_restaurant(
     service: RestaurantService = Depends(lambda: RestaurantService()),
 ):
     try:
-        return service.update(restaurant_id, owner_id, data)
+        out = service.update(restaurant_id, owner_id, data)
+        publish_restaurant_updated(out.owner_id, out.id, out.name, out.location, out.rating)
+        return out
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     except DatabaseError as e:
@@ -73,6 +78,7 @@ def delete_restaurant(
 ):
     try:
         service.delete(restaurant_id, owner_id)
+        publish_restaurant_deleted(restaurant_id)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
     except DatabaseError as e:

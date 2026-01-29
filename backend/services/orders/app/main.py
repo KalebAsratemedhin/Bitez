@@ -8,10 +8,11 @@ from shared.database import init_database, get_database
 from shared.exceptions import BitezException
 from shared.messaging import init_rabbitmq
 from app.config import settings
-from app.routes import restaurants, menus, menu_items
+from app.routes import ownership
+from app.consumers.restaurant_events import start_consumer
 
 logger = setup_logging(
-    service_name="restaurants-service",
+    service_name="orders-service",
     log_level="DEBUG" if settings.debug else "INFO",
     json_format=settings.environment != "development"
 )
@@ -19,7 +20,7 @@ logger = setup_logging(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Restaurants service starting up", extra={
+    logger.info("Orders service starting up", extra={
         "version": settings.app_version,
         "environment": settings.environment
     })
@@ -44,8 +45,9 @@ async def lifespan(app: FastAPI):
             password=settings.rabbitmq_password,
             virtual_host=settings.rabbitmq_vhost,
         )
+        start_consumer()
     except Exception as e:
-        logger.error("Failed to initialize database", extra={"error": str(e)})
+        logger.error("Failed to initialize", extra={"error": str(e)})
         raise
     yield
     try:
@@ -53,7 +55,7 @@ async def lifespan(app: FastAPI):
         get_rabbitmq().disconnect()
     except Exception:
         pass
-    logger.info("Restaurants service shutting down")
+    logger.info("Orders service shutting down")
 
 
 app = FastAPI(
@@ -64,7 +66,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
-    servers=[{"url": "http://localhost:8080/api/restaurants", "description": "API Gateway"}]
+    servers=[{"url": "http://localhost:8080/api/orders", "description": "API Gateway"}]
 )
 
 app.add_middleware(
@@ -101,9 +103,8 @@ async def general_exception_handler(request, exc: Exception):
     )
 
 
-app.include_router(restaurants.router)
-app.include_router(menus.router)
-app.include_router(menu_items.router)
+app.include_router(ownership.router)
+app.include_router(orders.router)
 
 
 @app.get("/")
@@ -122,7 +123,7 @@ async def health():
     db_healthy = db.health_check()
     return {
         "status": "healthy" if db_healthy else "unhealthy",
-        "service": "restaurants",
+        "service": "orders",
         "database": "connected" if db_healthy else "disconnected"
     }
 
@@ -134,11 +135,11 @@ async def readiness():
     if not db_ready:
         return JSONResponse(
             status_code=503,
-            content={"status": "not ready", "service": "restaurants", "database": "not connected"}
+            content={"status": "not ready", "service": "orders", "database": "not connected"}
         )
-    return {"status": "ready", "service": "restaurants"}
+    return {"status": "ready", "service": "orders"}
 
 
 @app.get("/health/live")
 async def liveness():
-    return {"status": "alive", "service": "restaurants"}
+    return {"status": "alive", "service": "orders"}
