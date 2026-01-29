@@ -20,6 +20,14 @@ from app.models import Restaurant, Menu, MenuItem
 
 target_metadata = Base.metadata
 
+ALLOWED_TABLES = frozenset({"restaurants", "menus", "menu_items", "alembic_version_restaurants"})
+
+
+def include_object(object, name, type_, reflected, compare_to):
+    if type_ == "table" and name not in ALLOWED_TABLES:
+        return False
+    return True
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
@@ -29,6 +37,7 @@ def run_migrations_offline() -> None:
         version_table="alembic_version_restaurants",
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -45,6 +54,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             version_table="alembic_version_restaurants",
+            include_object=include_object,
         )
         with context.begin_transaction():
             context.run_migrations()

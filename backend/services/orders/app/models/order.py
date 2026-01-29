@@ -16,6 +16,13 @@ class OrderStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class PaymentStatus(str, enum.Enum):
+    PENDING = "pending"
+    PAID = "paid"
+    FAILED = "failed"
+    REFUNDED = "refunded"
+
+
 class Order(Base):
     __tablename__ = "orders"
 
@@ -24,6 +31,8 @@ class Order(Base):
     restaurant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     delivery_address = Column(String(500), nullable=True)
     status = Column(SQLEnum(OrderStatus), nullable=False, default=OrderStatus.PENDING, index=True)
+    payment_status = Column(SQLEnum(PaymentStatus), nullable=False, default=PaymentStatus.PENDING, index=True)
+    stripe_payment_intent_id = Column(String(255), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

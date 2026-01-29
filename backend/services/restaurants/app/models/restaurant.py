@@ -13,6 +13,7 @@ class Restaurant(Base):
     name = Column(String(255), nullable=False)
     location = Column(String(500), nullable=True)
     rating = Column(Float, nullable=True)
+    stripe_account_id = Column(String(255), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

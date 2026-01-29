@@ -23,6 +23,7 @@ class RestaurantResponse(BaseModel):
     name: str
     location: Optional[str]
     rating: Optional[float]
+    stripe_account_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

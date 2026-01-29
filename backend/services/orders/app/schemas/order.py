@@ -4,7 +4,7 @@ from typing import Optional
 from uuid import UUID
 from pydantic import BaseModel, Field
 
-from app.models.order import OrderStatus
+from app.models.order import OrderStatus, PaymentStatus
 
 
 class OrderItemCreate(BaseModel):
@@ -43,6 +43,8 @@ class OrderResponse(BaseModel):
     restaurant_id: UUID
     delivery_address: Optional[str]
     status: OrderStatus
+    payment_status: PaymentStatus
+    stripe_payment_intent_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     items: list[OrderItemResponse] = []

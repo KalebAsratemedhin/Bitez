@@ -84,6 +84,46 @@ services:
       - ./services/orders:/app
       - ./shared:/app/shared
 
+  delivery:
+    build:
+      context: .
+      dockerfile: services/delivery/Dockerfile
+    container_name: bitz-delivery
+    env_file:
+      - .env
+    ports:
+      - "8006:8006"
+    depends_on:
+      - postgres
+      - rabbitmq
+      - orders
+      - restaurants
+    networks:
+      - bitz-network
+    volumes:
+      - ./services/delivery:/app
+      - ./shared:/app/shared
+
+  notifications:
+    build:
+      context: .
+      dockerfile: services/notifications/Dockerfile
+    container_name: bitz-notifications
+    env_file:
+      - .env
+    ports:
+      - "8007:8007"
+    depends_on:
+      - postgres
+      - rabbitmq
+      - orders
+      - delivery
+    networks:
+      - bitz-network
+    volumes:
+      - ./services/notifications:/app
+      - ./shared:/app/shared
+
   api-gateway:
     build:
       context: .
@@ -95,6 +135,8 @@ services:
       - users
       - restaurants
       - orders
+      - delivery
+      - notifications
     networks:
       - bitz-network
 

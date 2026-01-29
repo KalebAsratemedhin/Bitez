@@ -8,8 +8,9 @@ from shared.database import init_database, get_database
 from shared.exceptions import BitezException
 from shared.messaging import init_rabbitmq
 from app.config import settings
-from app.routes import ownership
+from app.routes import ownership, orders, webhooks
 from app.consumers.restaurant_events import start_consumer
+from app.consumers.delivery_events import start_delivery_delivered_consumer
 
 logger = setup_logging(
     service_name="orders-service",
@@ -46,6 +47,7 @@ async def lifespan(app: FastAPI):
             virtual_host=settings.rabbitmq_vhost,
         )
         start_consumer()
+        start_delivery_delivered_consumer()
     except Exception as e:
         logger.error("Failed to initialize", extra={"error": str(e)})
         raise
@@ -105,6 +107,7 @@ async def general_exception_handler(request, exc: Exception):
 
 app.include_router(ownership.router)
 app.include_router(orders.router)
+app.include_router(webhooks.router)
 
 
 @app.get("/")

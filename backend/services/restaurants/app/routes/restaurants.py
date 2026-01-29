@@ -1,9 +1,12 @@
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Depends
+import stripe
 from shared.logging import get_logger
 from shared.exceptions import NotFoundError, DatabaseError
 
+from app.config import settings
 from app.schemas.restaurant import RestaurantCreate, RestaurantUpdate, RestaurantResponse
+from app.schemas.stripe_connect import StripeConnectLinkRequest, StripeConnectLinkResponse
 from app.services.restaurant_service import RestaurantService
 from app.dependencies import get_current_user_id, require_restaurant_owner
 from app.events import publish_restaurant_created, publish_restaurant_updated, publish_restaurant_deleted
@@ -81,5 +84,41 @@ def delete_restaurant(
         publish_restaurant_deleted(restaurant_id)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except DatabaseError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e.message)
+
+
+@router.post("/{restaurant_id}/connect-stripe", response_model=StripeConnectLinkResponse)
+def connect_stripe(
+    restaurant_id: UUID,
+    data: StripeConnectLinkRequest,
+    owner_id: UUID = Depends(require_restaurant_owner),
+    service: RestaurantService = Depends(lambda: RestaurantService()),
+):
+    """Create or refresh Stripe Connect Express onboarding link. Money from orders goes to the restaurant's Stripe account."""
+    if not settings.stripe_secret_key:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Stripe is not configured")
+    try:
+        restaurant = service.get_restaurant_for_stripe(restaurant_id, owner_id)
+        if not restaurant:
+            raise NotFoundError("Restaurant not found")
+        stripe.api_key = settings.stripe_secret_key
+        account_id = restaurant.get("stripe_account_id")
+        if not account_id:
+            account = stripe.Account.create(type="express")
+            account_id = account.id
+            service.set_stripe_account_id(restaurant_id, owner_id, account_id)
+        link = stripe.AccountLink.create(
+            account=account_id,
+            refresh_url=data.refresh_url,
+            return_url=data.return_url,
+            type="account_onboarding",
+        )
+        return StripeConnectLinkResponse(url=link.url)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e.message)
+    except stripe.StripeError as e:
+        logger.warning("Stripe error", extra={"error": str(e)})
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Stripe error")
     except DatabaseError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e.message)

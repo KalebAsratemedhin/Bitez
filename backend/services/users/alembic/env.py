@@ -19,16 +19,15 @@ if config.config_file_name is not None:
 database_url = os.getenv("DATABASE_URL")
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
 
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
+ALLOWED_TABLES = frozenset({"users", "user_profiles", "refresh_tokens", "alembic_version_users"})
+
+
+def include_object(object, name, type_, reflected, compare_to):
+    if type_ == "table" and name not in ALLOWED_TABLES:
+        return False
+    return True
 
 
 def run_migrations_offline() -> None:
@@ -50,6 +49,7 @@ def run_migrations_offline() -> None:
         version_table="alembic_version_users",
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -71,8 +71,11 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata, version_table="alembic_version_users"
-    )
+            connection=connection,
+            target_metadata=target_metadata,
+            version_table="alembic_version_users",
+            include_object=include_object,
+        )
 
         with context.begin_transaction():
             context.run_migrations()

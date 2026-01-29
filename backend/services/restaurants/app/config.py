@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     rabbitmq_user: str = Field(default="guest", env="RABBITMQ_USER")
     rabbitmq_password: str = Field(default="guest", env="RABBITMQ_PASSWORD")
     rabbitmq_vhost: str = Field(default="/", env="RABBITMQ_VHOST")
+    stripe_secret_key: str = Field(default="", env="STRIPE_SECRET_KEY")
 
     @field_validator("jwt_secret")
     @classmethod

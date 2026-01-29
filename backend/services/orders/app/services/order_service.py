@@ -5,8 +5,9 @@ from shared.database import get_database
 from shared.logging import get_logger
 from shared.exceptions import NotFoundError, DatabaseError
 
-from app.models.order import Order, OrderItem, OrderStatus
+from app.models.order import Order, OrderItem, OrderStatus, PaymentStatus
 from app.schemas.order import OrderCreate, OrderUpdate, OrderResponse, OrderItemResponse
+from app.events import publish_order_created
 
 
 class OrderServiceError(Exception):
@@ -39,8 +40,10 @@ class OrderService:
                         quantity=it.quantity,
                     )
                 )
+            session.commit()
             session.refresh(order)
             logger.info("Order created", extra={"order_id": str(order.id), "customer_id": str(customer_id)})
+            publish_order_created(order.id, order.customer_id, order.restaurant_id)
             return self._to_response(order)
 
     def get_by_id(self, order_id: UUID) -> Optional[OrderResponse]:
@@ -96,6 +99,8 @@ class OrderService:
             restaurant_id=order.restaurant_id,
             delivery_address=order.delivery_address,
             status=order.status,
+            payment_status=order.payment_status,
+            stripe_payment_intent_id=order.stripe_payment_intent_id,
             created_at=order.created_at,
             updated_at=order.updated_at,
             items=items,

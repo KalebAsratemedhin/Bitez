@@ -7,7 +7,7 @@ from shared.logging import setup_logging, get_logger
 from shared.database import init_database, get_database
 from shared.exceptions import BitezException
 from app.config import settings
-from app.routes import auth, profiles
+from app.routes import auth, profiles, internal
 
 logger = setup_logging(
     service_name="users-service",
@@ -94,6 +94,7 @@ async def general_exception_handler(request, exc: Exception):
 
 app.include_router(auth.router)
 app.include_router(profiles.router)
+app.include_router(internal.router)
 
 
 @app.get("/")

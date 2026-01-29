@@ -44,6 +44,28 @@ class RestaurantService:
                 return None
             return RestaurantResponse.model_validate(restaurant)
 
+    def get_restaurant_for_stripe(self, restaurant_id: UUID, owner_id: UUID) -> Optional[dict]:
+        """Return restaurant dict with stripe_account_id for Stripe Connect. None if not found or not owner."""
+        with self.db.get_session() as session:
+            r = session.query(Restaurant).filter(
+                Restaurant.id == restaurant_id,
+                Restaurant.owner_id == owner_id,
+            ).first()
+            if not r:
+                return None
+            return {"id": r.id, "stripe_account_id": r.stripe_account_id}
+
+    def set_stripe_account_id(self, restaurant_id: UUID, owner_id: UUID, stripe_account_id: str) -> None:
+        with self.db.get_session() as session:
+            restaurant = session.query(Restaurant).filter(
+                Restaurant.id == restaurant_id,
+                Restaurant.owner_id == owner_id,
+            ).first()
+            if not restaurant:
+                raise NotFoundError("Restaurant not found")
+            restaurant.stripe_account_id = stripe_account_id
+            session.commit()
+
     def get_by_owner(self, owner_id: UUID) -> List[RestaurantResponse]:
         with self.db.get_session() as session:
             restaurants = session.query(Restaurant).filter(Restaurant.owner_id == owner_id).all()
