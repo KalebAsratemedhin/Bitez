@@ -124,6 +124,23 @@ services:
       - ./services/notifications:/app
       - ./shared:/app/shared
 
+  reviews:
+    build:
+      context: .
+      dockerfile: services/reviews/Dockerfile
+    container_name: bitz-reviews
+    env_file:
+      - .env
+    ports:
+      - "8008:8008"
+    depends_on:
+      - postgres
+    networks:
+      - bitz-network
+    volumes:
+      - ./services/reviews:/app
+      - ./shared:/app/shared
+
   api-gateway:
     build:
       context: .
@@ -137,6 +154,7 @@ services:
       - orders
       - delivery
       - notifications
+      - reviews
     networks:
       - bitz-network
 

@@ -1,5 +1,6 @@
 from typing import Optional, List
 from uuid import UUID
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
 from shared.database import get_database
@@ -71,9 +72,24 @@ class RestaurantService:
             restaurants = session.query(Restaurant).filter(Restaurant.owner_id == owner_id).all()
             return [RestaurantResponse.model_validate(r) for r in restaurants]
 
-    def list_all(self) -> List[RestaurantResponse]:
+    def list_all(
+        self,
+        search: Optional[str] = None,
+        rating_min: Optional[float] = None,
+    ) -> List[RestaurantResponse]:
         with self.db.get_session() as session:
-            restaurants = session.query(Restaurant).all()
+            q = session.query(Restaurant)
+            if search and search.strip():
+                term = f"%{search.strip()}%"
+                q = q.filter(
+                    or_(
+                        Restaurant.name.ilike(term),
+                        Restaurant.location.ilike(term),
+                    )
+                )
+            if rating_min is not None:
+                q = q.filter(Restaurant.rating >= rating_min)
+            restaurants = q.all()
             return [RestaurantResponse.model_validate(r) for r in restaurants]
 
     def update(self, restaurant_id: UUID, owner_id: UUID, data: RestaurantUpdate) -> RestaurantResponse:

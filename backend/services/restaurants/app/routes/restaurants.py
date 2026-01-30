@@ -1,5 +1,6 @@
+from typing import Optional
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Query
 import stripe
 from shared.logging import get_logger
 from shared.exceptions import NotFoundError, DatabaseError
@@ -32,9 +33,11 @@ def create_restaurant(
 
 @router.get("", response_model=list[RestaurantResponse])
 def list_restaurants(
+    search: Optional[str] = Query(None, description="Filter by restaurant name or location"),
+    rating_min: Optional[float] = Query(None, ge=0, le=5, description="Minimum rating (0–5)"),
     service: RestaurantService = Depends(lambda: RestaurantService()),
 ):
-    return service.list_all()
+    return service.list_all(search=search, rating_min=rating_min)
 
 
 @router.get("/my", response_model=list[RestaurantResponse])
