@@ -5,6 +5,8 @@ from shared.logging import get_logger
 from shared.messaging import get_rabbitmq, MessageConsumer
 
 from app.services.notification_service import NotificationService
+from shared.messaging import RabbitMQConnection
+from app.config import settings
 
 logger = get_logger("notifications.delivery_consumer")
 
@@ -39,7 +41,15 @@ def _handle_message(msg: dict, channel) -> None:
 def start_delivery_consumer() -> None:
     def run():
         try:
-            conn = get_rabbitmq()
+            conn = RabbitMQConnection(
+                host=settings.rabbitmq_host,
+                port=settings.rabbitmq_port,
+                username=settings.rabbitmq_user,
+                password=settings.rabbitmq_password,
+                virtual_host=settings.rabbitmq_vhost,
+            )
+            conn.connect(retries=10, retry_delay=3.0)
+        
             conn.declare_exchange(EXCHANGE_DELIVERIES, exchange_type="topic")
             conn.declare_queue(QUEUE)
             for rk in ROUTING_KEYS:

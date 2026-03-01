@@ -6,6 +6,7 @@ from jose import JWTError, jwt
 from shared.logging import get_logger
 from app.config import settings
 from app.services.ownership_service import OwnershipService
+from app.services.order_service import OrderService
 
 logger = get_logger("orders.dependencies")
 

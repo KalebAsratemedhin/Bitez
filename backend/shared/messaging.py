@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 from typing import Optional, Callable, Dict, Any
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
@@ -38,25 +39,34 @@ class RabbitMQConnection:
             "virtual_host": virtual_host
         })
     
-    def connect(self):
-        try:
-            credentials = pika.PlainCredentials(self.username, self.password)
-            parameters = pika.ConnectionParameters(
-                host=self.host,
-                port=self.port,
-                virtual_host=self.virtual_host,
-                credentials=credentials,
-                heartbeat=600,
-                blocked_connection_timeout=300
-            )
-            
-            self.connection = pika.BlockingConnection(parameters)
-            self.channel = self.connection.channel()
-            
-            logger.info("Connected to RabbitMQ")
-        except Exception as e:
-            logger.error("Failed to connect to RabbitMQ", extra={"error": str(e)})
-            raise MessagingError(f"Failed to connect to RabbitMQ: {str(e)}")
+    def connect(self, retries: int = 10, retry_delay: float = 3.0):
+        last_error = None
+        for attempt in range(1, retries + 1):
+            try:
+                credentials = pika.PlainCredentials(self.username, self.password)
+                parameters = pika.ConnectionParameters(
+                    host=self.host,
+                    port=self.port,
+                    virtual_host=self.virtual_host,
+                    credentials=credentials,
+                    heartbeat=600,
+                    blocked_connection_timeout=300
+                )
+                self.connection = pika.BlockingConnection(parameters)
+                self.channel = self.connection.channel()
+                logger.info("Connected to RabbitMQ")
+                return
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    "RabbitMQ connection attempt %d/%d failed: %s",
+                    attempt, retries, str(e),
+                    extra={"error": str(e), "attempt": attempt}
+                )
+                if attempt < retries:
+                    time.sleep(retry_delay)
+        logger.error("Failed to connect to RabbitMQ after %d attempts", retries, extra={"error": str(last_error)})
+        raise MessagingError(f"Failed to connect to RabbitMQ: {str(last_error)}")
     
     def disconnect(self):
         try:

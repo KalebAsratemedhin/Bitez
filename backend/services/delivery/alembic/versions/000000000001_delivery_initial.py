@@ -19,7 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.create_table(
-        "restaurant_ownership",
+        "delivery_restaurant_ownership",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("owner_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("restaurant_id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -27,9 +27,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("owner_id", "restaurant_id", name="uq_delivery_restaurant_ownership_owner_restaurant"),
     )
-    op.create_index(op.f("ix_restaurant_ownership_id"), "restaurant_ownership", ["id"], unique=False)
-    op.create_index(op.f("ix_restaurant_ownership_owner_id"), "restaurant_ownership", ["owner_id"], unique=False)
-    op.create_index(op.f("ix_restaurant_ownership_restaurant_id"), "restaurant_ownership", ["restaurant_id"], unique=False)
+    op.create_index(op.f("ix_delivery_restaurant_ownership_id"), "delivery_restaurant_ownership", ["id"], unique=False)
+    op.create_index(op.f("ix_delivery_restaurant_ownership_owner_id"), "delivery_restaurant_ownership", ["owner_id"], unique=False)
+    op.create_index(op.f("ix_delivery_restaurant_ownership_restaurant_id"), "delivery_restaurant_ownership", ["restaurant_id"], unique=False)
 
     op.create_table(
         "deliveries",

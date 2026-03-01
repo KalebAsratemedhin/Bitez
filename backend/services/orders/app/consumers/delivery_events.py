@@ -5,6 +5,8 @@ from shared.messaging import get_rabbitmq, MessageConsumer
 from app.services.order_service import OrderService
 from app.schemas.order import OrderUpdate
 from app.models.order import OrderStatus
+from app.config import settings
+from shared.messaging import RabbitMQConnection
 
 logger = get_logger("orders.delivery_consumer")
 
@@ -31,7 +33,15 @@ def _handle_message(msg: dict, channel) -> None:
 def start_delivery_delivered_consumer() -> None:
     def run():
         try:
-            conn = get_rabbitmq()
+            conn = RabbitMQConnection(
+                host=settings.rabbitmq_host,
+                port=settings.rabbitmq_port,
+                username=settings.rabbitmq_user,
+                password=settings.rabbitmq_password,
+                virtual_host=settings.rabbitmq_vhost,
+            )
+            conn.connect(retries=10, retry_delay=3.0)
+        
             conn.declare_exchange(EXCHANGE_DELIVERIES, exchange_type="topic")
             conn.declare_queue(QUEUE_DELIVERY_DELIVERED)
             conn.bind_queue(QUEUE_DELIVERY_DELIVERED, EXCHANGE_DELIVERIES, ROUTING_KEY_DELIVERED)
