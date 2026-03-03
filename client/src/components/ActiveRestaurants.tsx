@@ -6,11 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { getImageUrl } from "@/lib/utils";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-} from "@/components/ui/pagination";
+import { PaginationBar } from "@/components/ui/pagination-bar";
 import {
   Select,
   SelectContent,
@@ -19,9 +15,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+const PAGE_SIZE_OPTIONS = [5, 10, 15, 20] as const;
+
 const ActiveRestaurants = () => {
   const [page, setPage] = useState(1);
-  const [limit] = useState(6);
+  const [limit, setLimit] = useState(10);
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const [ratingFilter, setRatingFilter] = useState("all");
@@ -31,7 +29,9 @@ const ActiveRestaurants = () => {
     { refetchOnMountOrArgChange: true }
   );
 
-  const totalPages = data?.totalPages || 1;
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages =
+    data?.totalPages ?? Math.max(1, Math.ceil(totalCount / limit));
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +58,8 @@ const ActiveRestaurants = () => {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="flex flex-col min-h-[calc(100vh-5rem)]">
+      <div className="flex-1 flex flex-col space-y-10">
       {/* Search & filter */}
       <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between">
         <form
@@ -119,7 +120,7 @@ const ActiveRestaurants = () => {
         </div>
       ) : (
         <>
-          <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 flex-1 content-start">
             {data?.data.map((restaurant) => (
               <Link
                 key={restaurant._id}
@@ -166,43 +167,23 @@ const ActiveRestaurants = () => {
               </Link>
             ))}
           </div>
-
-          {totalPages > 1 && (
-            <div className="flex justify-center pt-6">
-              <Pagination>
-                <PaginationContent className="gap-2">
-                  <PaginationItem>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        disabled={page === 1}
-                        className="rounded-full"
-                      >
-                        Previous
-                      </Button>
-                  </PaginationItem>
-                  <PaginationItem>
-                    <span className="text-sm text-stone-600 px-4 py-2">
-                      Page {page} of {totalPages}
-                    </span>
-                  </PaginationItem>
-                  <PaginationItem>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={page === totalPages}
-                        className="rounded-full"
-                      >
-                        Next
-                      </Button>
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
-          )}
         </>
+      )}
+      </div>
+
+      {data && data.data.length > 0 && (
+        <PaginationBar
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          limit={limit}
+          limitOptions={PAGE_SIZE_OPTIONS}
+          onLimitChange={(v) => {
+            setLimit(v);
+            setPage(1);
+          }}
+          className="flex-row"
+        />
       )}
     </div>
   );

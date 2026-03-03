@@ -78,8 +78,9 @@ export default function DeliveryPersonDashboard() {
         <div className="rounded-2xl bg-stone-50 border border-stone-200/60 p-6">
           <h3 className="font-display font-semibold text-stone-800 mb-4">Delivery status</h3>
           <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
+            <PieChart key="delivery-status">
               <Pie
+                key="delivery-status-pie"
                 data={data.deliveryData}
                 dataKey="value"
                 nameKey="name"
@@ -88,8 +89,8 @@ export default function DeliveryPersonDashboard() {
                 paddingAngle={2}
                 label
               >
-                {data.deliveryData.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                {data.deliveryData.map((entry, index) => (
+                  <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip />

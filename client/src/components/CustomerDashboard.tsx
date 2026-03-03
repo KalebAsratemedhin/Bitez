@@ -97,12 +97,13 @@ export default function CustomerDashboard() {
         <div className="lg:col-span-2 rounded-2xl bg-white border border-stone-200/60 p-6">
           <h3 className="font-display font-semibold text-stone-800 mb-4">Monthly spending</h3>
           <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={data.monthlySpending}>
+            <LineChart key="monthly-spending" data={data.monthlySpending}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis dataKey="month" tick={{ fill: "#78716c", fontSize: 12 }} />
               <YAxis tick={{ fill: "#78716c", fontSize: 12 }} />
               <Tooltip />
               <Line
+                key="amount"
                 type="monotone"
                 dataKey="amount"
                 stroke="var(--brand)"
@@ -115,8 +116,9 @@ export default function CustomerDashboard() {
         <div className="rounded-2xl bg-stone-50 border border-stone-200/60 p-6">
           <h3 className="font-display font-semibold text-stone-800 mb-4">Order status</h3>
           <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
+            <PieChart key="order-status">
               <Pie
+                key="order-status-pie"
                 data={data.orderStatusDistribution}
                 dataKey="value"
                 nameKey="name"
@@ -140,12 +142,16 @@ export default function CustomerDashboard() {
       <div className="rounded-2xl bg-white border border-stone-200/60 p-6">
         <h3 className="font-display font-semibold text-stone-800 mb-4">Most ordered restaurants</h3>
         <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={data.favoriteRestaurants} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+          <BarChart
+            key="favorite-restaurants"
+            data={data.favoriteRestaurants}
+            margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
             <XAxis dataKey="name" tick={{ fill: "#78716c", fontSize: 12 }} />
             <YAxis tick={{ fill: "#78716c", fontSize: 12 }} />
             <Tooltip />
-            <Bar dataKey="orders" fill="var(--brand)" radius={[4, 4, 0, 0]} barSize={24} />
+            <Bar key="orders" dataKey="orders" fill="var(--brand)" radius={[4, 4, 0, 0]} barSize={24} />
           </BarChart>
         </ResponsiveContainer>
       </div>

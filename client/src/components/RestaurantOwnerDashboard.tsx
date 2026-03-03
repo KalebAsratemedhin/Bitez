@@ -113,7 +113,7 @@ const RestaurantOwnerDashboard = () => {
                 Monthly sales per restaurant
               </h3>
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={salesOverTime}>
+                <LineChart key="sales-over-time" data={salesOverTime}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
                   <XAxis dataKey="date" tick={{ fill: "#57534e", fontSize: 12 }} />
                   <YAxis tick={{ fill: "#57534e", fontSize: 12 }} />
@@ -137,8 +137,9 @@ const RestaurantOwnerDashboard = () => {
                 Sales share by restaurant
               </h3>
               <ResponsiveContainer width="100%" height={280}>
-                <PieChart>
+                <PieChart key="sales-share">
                   <Pie
+                    key="sales-share-pie"
                     data={salesShare}
                     dataKey="value"
                     nameKey="name"
@@ -147,8 +148,8 @@ const RestaurantOwnerDashboard = () => {
                     outerRadius={90}
                     label
                   >
-                    {salesShare.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    {salesShare.map((entry, index) => (
+                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -163,12 +164,12 @@ const RestaurantOwnerDashboard = () => {
                 Orders per restaurant
               </h3>
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={ordersPerRestaurant}>
+                <BarChart key="orders-per-restaurant" data={ordersPerRestaurant}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
                   <XAxis dataKey="name" tick={{ fill: "#57534e", fontSize: 12 }} />
                   <YAxis tick={{ fill: "#57534e", fontSize: 12 }} />
                   <Tooltip />
-                  <Bar dataKey="orders" fill="var(--brand)" radius={[4, 4, 0, 0]} barSize={24} />
+                  <Bar key="orders" dataKey="orders" fill="var(--brand)" radius={[4, 4, 0, 0]} barSize={24} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -178,12 +179,12 @@ const RestaurantOwnerDashboard = () => {
                 Customers per restaurant
               </h3>
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={customersPerRestaurant}>
+                <BarChart key="customers-per-restaurant" data={customersPerRestaurant}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
                   <XAxis dataKey="name" tick={{ fill: "#57534e", fontSize: 12 }} />
                   <YAxis tick={{ fill: "#57534e", fontSize: 12 }} />
                   <Tooltip />
-                  <Bar dataKey="customers" fill="#0d9488" radius={[4, 4, 0, 0]} barSize={24} />
+                  <Bar key="customers" dataKey="customers" fill="#0d9488" radius={[4, 4, 0, 0]} barSize={24} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

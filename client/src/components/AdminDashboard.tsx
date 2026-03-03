@@ -87,24 +87,24 @@ export default function AdminDashboard() {
         <div className="rounded-2xl bg-white border border-stone-200/60 p-6">
           <h3 className="font-display font-semibold text-stone-800 mb-4">Sales trend (monthly)</h3>
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={salesData}>
+            <BarChart key="sales-trend" data={salesData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis dataKey="name" tick={{ fill: "#78716c", fontSize: 12 }} />
               <YAxis tick={{ fill: "#78716c", fontSize: 12 }} />
               <Tooltip />
-              <Bar dataKey="sales" fill="var(--brand)" radius={[4, 4, 0, 0]} barSize={24} />
+              <Bar key="sales" dataKey="sales" fill="var(--brand)" radius={[4, 4, 0, 0]} barSize={24} />
             </BarChart>
           </ResponsiveContainer>
         </div>
         <div className="rounded-2xl bg-stone-50 border border-stone-200/60 p-6">
           <h3 className="font-display font-semibold text-stone-800 mb-4">User distribution</h3>
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={userData}>
+            <BarChart key="user-distribution" data={userData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis dataKey="name" tick={{ fill: "#78716c", fontSize: 12 }} />
               <YAxis tick={{ fill: "#78716c", fontSize: 12 }} />
               <Tooltip />
-              <Bar dataKey="value" fill="#0d9488" radius={[4, 4, 0, 0]} barSize={24} />
+              <Bar key="value" dataKey="value" fill="#0d9488" radius={[4, 4, 0, 0]} barSize={24} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -113,12 +113,12 @@ export default function AdminDashboard() {
       <div className="rounded-2xl bg-white border border-stone-200/60 p-6">
         <h3 className="font-display font-semibold text-stone-800 mb-4">Revenue breakdown</h3>
         <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={revenueData}>
+          <BarChart key="revenue-breakdown" data={revenueData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
             <XAxis dataKey="name" tick={{ fill: "#78716c", fontSize: 12 }} />
             <YAxis tick={{ fill: "#78716c", fontSize: 12 }} />
             <Tooltip />
-            <Bar dataKey="value" fill="#b45309" radius={[4, 4, 0, 0]} barSize={24} />
+            <Bar key="value" dataKey="value" fill="#b45309" radius={[4, 4, 0, 0]} barSize={24} />
           </BarChart>
         </ResponsiveContainer>
       </div>
