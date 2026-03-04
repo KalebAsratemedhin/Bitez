@@ -66,9 +66,11 @@ const DeliveryPersonDeliveries = () => {
     limit,
   });
 
-  const deliveries = data?.data || [];
+  const rawDeliveries = data?.data || [];
+  const deliveries = Array.isArray(rawDeliveries) ? rawDeliveries.filter(Boolean) : [];
   const totalCount = data?.pagination?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
+  const deliveryPerson = data?.deliveryPerson;
 
   const handleStatusUpdate = async (
     deliveryId: string,
@@ -117,17 +119,58 @@ const DeliveryPersonDeliveries = () => {
         <h1 className="font-display text-2xl sm:text-3xl font-semibold text-stone-900 tracking-tight">
           Update status and view delivery details.
         </h1>
+        {deliveryPerson && (
+          <p className="mt-2 text-stone-600 flex items-center gap-2 flex-wrap">
+            <UserRound className="h-4 w-4 text-stone-500" />
+            <span className="font-medium text-stone-800">{deliveryPerson.name}</span>
+            {deliveryPerson.phoneNumber && (
+              <>
+                <span className="text-stone-400">·</span>
+                <span className="flex items-center gap-1">
+                  <Phone className="h-3.5 w-3.5" />
+                  {deliveryPerson.phoneNumber}
+                </span>
+              </>
+            )}
+          </p>
+        )}
       </div>
 
       <div className="space-y-5">
-        {deliveries.map((delivery) => (
+        {deliveries.map((delivery, index) => {
+          const orderId = delivery?.orderId;
+          const restaurantId = orderId && typeof orderId === "object" && "restaurantID" in orderId
+            ? (orderId as { restaurantID?: { _id?: string; name?: string } }).restaurantID
+            : undefined;
+          const restaurantIdStr =
+            restaurantId != null && typeof restaurantId === "object" && "_id" in restaurantId
+              ? String((restaurantId as { _id?: string })._id)
+              : typeof restaurantId === "string"
+                ? restaurantId
+                : "";
+          const restaurantName =
+            restaurantId != null && typeof restaurantId === "object" && "name" in restaurantId
+              ? String((restaurantId as { name?: string }).name ?? "Restaurant")
+              : "Restaurant";
+          const customerId = orderId && typeof orderId === "object" && "customerID" in orderId
+            ? (orderId as { customerID?: { name?: string; phoneNumber?: string } }).customerID
+            : undefined;
+          const customerName =
+            customerId != null && typeof customerId === "object" && "name" in customerId
+              ? String((customerId as { name?: string }).name ?? "—")
+              : "—";
+          const customerPhone =
+            customerId != null && typeof customerId === "object" && "phoneNumber" in customerId
+              ? String((customerId as { phoneNumber?: string }).phoneNumber ?? "—")
+              : "—";
+          return (
           <Card
-            key={delivery._id}
+            key={delivery?._id ?? `delivery-${index}`}
             className="overflow-hidden border border-stone-200/80 shadow-sm hover:shadow-md transition-shadow rounded-2xl"
           >
             <CardContent className="p-0">
               <div className="p-4 sm:p-5 border-b border-stone-100 bg-stone-50/30">
-                <DeliveryStatusStepper status={delivery.status as DeliveryStatus} />
+                <DeliveryStatusStepper status={delivery?.status as DeliveryStatus} />
               </div>
 
               <div className="p-4 sm:p-5 space-y-4">
@@ -138,16 +181,20 @@ const DeliveryPersonDeliveries = () => {
                     </div>
                     <div className="min-w-0">
                       <p className="font-display font-semibold text-stone-800">
-                        <Link
-                          className="hover:text-[var(--brand)] transition-colors"
-                          href={`/restaurants/${delivery.orderId.restaurantID._id}`}
-                        >
-                          {delivery.orderId.restaurantID.name}
-                        </Link>
+                        {restaurantIdStr ? (
+                          <Link
+                            className="hover:text-[var(--brand)] transition-colors"
+                            href={`/restaurants/${restaurantIdStr}`}
+                          >
+                            {restaurantName}
+                          </Link>
+                        ) : (
+                          <span>{restaurantName}</span>
+                        )}
                       </p>
-                      <p className="text-xs text-stone-500 flex items-center gap-1 mt-0.5">
+                      <p className="text-xs text-stone-500 flex items-center gap-1 mt-0.5" suppressHydrationWarning>
                         <Clock className="h-3.5 w-3.5" />
-                        ETA {formatDeliveryTime(delivery.estimatedDeliveryTime)}
+                        ETA {formatDeliveryTime(delivery?.estimatedDeliveryTime)}
                       </p>
                     </div>
                   </div>
@@ -163,39 +210,40 @@ const DeliveryPersonDeliveries = () => {
                         <DialogTitle className="font-display">Delivery details</DialogTitle>
                       </DialogHeader>
                       <div className="grid gap-4">
-                        <DeliveryStatusStepper status={delivery.status as DeliveryStatus} />
-                        {delivery.orderId?.orderDetails?.length ? (
+                        <DeliveryStatusStepper status={delivery?.status as DeliveryStatus} />
+                        {orderId && typeof orderId === "object" && "orderDetails" in orderId && Array.isArray((orderId as { orderDetails?: unknown[] }).orderDetails) && (orderId as { orderDetails: unknown[] }).orderDetails.length ? (
                           <div className="rounded-xl border border-stone-200 overflow-hidden">
                             <div className="bg-stone-50 px-4 py-2.5 border-b border-stone-200 flex items-center gap-2">
                               <Receipt className="h-4 w-4 text-[var(--brand)]" />
                               <span className="text-sm font-medium text-stone-700">Items</span>
                             </div>
                             <ul className="divide-y divide-stone-100">
-                              {delivery.orderId.orderDetails.map(
+                              {((orderId as { orderDetails: { item?: { _id?: string; name?: string; price?: number }; quantity?: number }[] }).orderDetails).map(
                                 (
-                                  {
-                                    item,
-                                    quantity,
-                                  }: { item: { _id: string; name: string; price: number }; quantity: number },
+                                  entry: { item?: { _id?: string; name?: string; price?: number }; quantity?: number },
                                   i: number
-                                ) => (
+                                ) => {
+                                  const item = entry?.item;
+                                  const quantity = entry?.quantity ?? 0;
+                                  return (
                                   <li
-                                    key={item._id ?? i}
+                                    key={item?._id ?? i}
                                     className="flex justify-between items-center px-4 py-3 text-sm"
                                   >
                                     <span className="text-stone-800">
-                                      {item.name} × <span className="font-medium">{quantity}</span>
+                                      {item?.name ?? "Item"} × <span className="font-medium">{quantity}</span>
                                     </span>
                                     <span className="text-stone-600">
-                                      ETB {(item.price * quantity).toFixed(2)}
+                                      ETB {((item?.price ?? 0) * quantity).toFixed(2)}
                                     </span>
                                   </li>
-                                )
+                                  );
+                                }
                               )}
                             </ul>
                           </div>
                         ) : null}
-                        {delivery.orderId?.coordinates && (
+                        {orderId && typeof orderId === "object" && "coordinates" in orderId && (orderId as { coordinates?: unknown }).coordinates && (
                           <div className="rounded-xl border border-stone-200 overflow-hidden">
                             <div className="bg-stone-50 px-4 py-2.5 border-b border-stone-200 flex items-center gap-2">
                               <MapPin className="h-4 w-4 text-[var(--brand)]" />
@@ -219,19 +267,19 @@ const DeliveryPersonDeliveries = () => {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-stone-800">
-                      {delivery.orderId.customerID.name}
+                      {customerName}
                     </p>
                     <p className="text-xs text-stone-500 flex items-center gap-1">
                       <Phone className="h-3.5 w-3.5" />
-                      {delivery.orderId.customerID.phoneNumber ?? "—"}
+                      {customerPhone}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-2">
-                  {delivery.status === "assigned" && (
+                  {delivery?.status === "assigned" && (
                     <Button
-                      onClick={() => handleStatusUpdate(delivery._id, "picked_up")}
+                      onClick={() => handleStatusUpdate(String(delivery?._id), "picked_up")}
                       disabled={isUpdating}
                       className="rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] gap-2"
                     >
@@ -239,10 +287,10 @@ const DeliveryPersonDeliveries = () => {
                       Mark picked up
                     </Button>
                   )}
-                  {(delivery.status === "picked_up" || delivery.status === "on_the_way") && (
+                  {(delivery?.status === "picked_up" || delivery?.status === "on_the_way") && (
                     <>
                       <Button
-                        onClick={() => handleStatusUpdate(delivery._id, "delivered")}
+                        onClick={() => handleStatusUpdate(String(delivery?._id), "delivered")}
                         disabled={isUpdating}
                         className="rounded-xl bg-[var(--brand)] hover:bg-[var(--brand-hover)] gap-2"
                       >
@@ -250,7 +298,7 @@ const DeliveryPersonDeliveries = () => {
                       </Button>
                       <Button
                         variant="destructive"
-                        onClick={() => handleStatusUpdate(delivery._id, "failed")}
+                        onClick={() => handleStatusUpdate(String(delivery?._id), "failed")}
                         disabled={isUpdating}
                         className="rounded-xl gap-2"
                       >
@@ -263,7 +311,8 @@ const DeliveryPersonDeliveries = () => {
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       {totalPages > 1 && (

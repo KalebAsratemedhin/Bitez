@@ -6,7 +6,7 @@ export const menuApi = api.injectEndpoints({
   endpoints: (builder) => ({
     createMenu: builder.mutation({
       query: ({ restaurantId, formData }) => ({
-        url: `/menu/createMenu/${restaurantId}`,
+        url: `/restaurant/menu/createMenu/${restaurantId}`,
         method: "POST",
         body: formData,
       }),
@@ -14,19 +14,19 @@ export const menuApi = api.injectEndpoints({
     }),
     
     getMenusByRestaurant: builder.query<MenuResponse, string>({
-      query: (restaurantId) => `/menu/getMenu/${restaurantId}`,
+      query: (restaurantId) => `/restaurant/menu/getMenu/${restaurantId}`,
       providesTags: ['Menus'],
     }),
 
     getMenuById: builder.query({
-      query: (id: string) => `/menu/${id}`,
+      query: (id: string) => `/restaurant/menu/${id}`,
       providesTags: ['Menu'],
     }),
 
     updateMenu: builder.mutation({
       query: ({ menuId, formData}) => (
         {
-          url: `/menu/updateMenu/${menuId}`,
+          url: `/restaurant/menu/updateMenu/${menuId}`,
           method: 'PUT',
           body: formData
       }),
@@ -35,7 +35,7 @@ export const menuApi = api.injectEndpoints({
 
     deleteMenu: builder.mutation({
       query: (menuId: string) => ({
-        url: `/menu/deleteMenu/${menuId}`,
+        url: `/restaurant/menu/deleteMenu/${menuId}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['Menu', 'Menus'],

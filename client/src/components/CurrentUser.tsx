@@ -16,7 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast, Toaster } from "sonner";
-import socket from "@/lib/socket";
+import socket, { hasSocketServer } from "@/lib/socket";
 
 const CurrentUser = () => {
   const { data: user, refetch } = useGetCurrentUserQuery();
@@ -30,7 +30,7 @@ const CurrentUser = () => {
   const unseenNotifications = notifications.filter((n) => !n.seen);
 
   useEffect(() => {
-    if (user?._id) {
+    if (user?._id && hasSocketServer) {
       const connectSocket = () => {
         if (!socket.connected) {
           socket.connect();

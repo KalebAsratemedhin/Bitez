@@ -127,12 +127,6 @@ const UpdateRestaurantForm = ({
   const [formReady, setFormReady] = useState(false);
 
   useEffect(() => {
-    if (!asPage && restaurantProp) {
-      console.log("[UpdateRestaurantForm] Restaurant selected for edit:", restaurantProp);
-    }
-  }, [asPage, restaurantProp]);
-
-  useEffect(() => {
     if (!asPage && restaurantProp?._id) setFormReady(false);
   }, [asPage, restaurantProp?._id]);
 

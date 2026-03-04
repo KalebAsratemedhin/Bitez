@@ -27,11 +27,13 @@ export const deliveryApi = api.injectEndpoints({
     }),
 
     getDeliveryPersonDeliveries: builder.query<
-      PaginatedResponse<PopulatedDelivery>,
+      PaginatedResponse<PopulatedDelivery> & {
+        deliveryPerson?: { name: string; phoneNumber?: string };
+      },
       { page?: number; limit?: number }
     >({
       query: ({ page = 1, limit = 10 }) => ({
-        url: `/delivery/delivery-person?page=${page}&limit=${limit}`,
+        url: `/delivery/delivery-person/deliveries?page=${page}&limit=${limit}`,
         method: "GET",
       }),
       providesTags: ["delivery-person-deliveries"],

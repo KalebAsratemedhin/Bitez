@@ -7,7 +7,7 @@ import { isAuthenticated } from "@/utils/auth";
 import CurrentUser from "./CurrentUser";
 import Cart from "./Cart";
 import { SidebarTrigger, useSidebar } from "./ui/sidebar";
-import { FC } from "react";
+import { FC, useState, useEffect } from "react";
 
 
 const HEADER_HEIGHT = "4rem";
@@ -33,9 +33,13 @@ function getPageTitle(pathname: string): string {
 }
 
 export const AuthHeader: FC = () => {
+  const [mounted, setMounted] = useState(false);
   const { state } = useSidebar();
   const pathname = usePathname();
   const pageTitle = getPageTitle(pathname ?? "");
+
+  useEffect(() => setMounted(true), []);
+
   return (
     <header
       className={`fixed top-0 right-0 z-50 flex h-16 items-center justify-between border-b border-stone-200/80 px-6 py-4 transition-[left] duration-200 ease-linear ${
@@ -58,7 +62,7 @@ export const AuthHeader: FC = () => {
         <NavLink href="/restaurants">Restaurants</NavLink>
       </nav>
 
-      {isAuthenticated() ? (
+      {mounted && isAuthenticated() ? (
         <div className="flex items-center gap-3">
           <Cart />
           <CurrentUser />
@@ -85,6 +89,10 @@ export const AuthHeader: FC = () => {
 
 
 export const BasicHeader: FC = () => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
   return (
     <header
       className="fixed top-0 left-0 right-0 z-50 flex h-16 items-center justify-between border-b border-stone-200/80 px-6 py-4"
@@ -104,7 +112,7 @@ export const BasicHeader: FC = () => {
         <NavLink href="/restaurants">Restaurants</NavLink>
       </nav>
 
-      {isAuthenticated() ? (
+      {mounted && isAuthenticated() ? (
         <div className="flex items-center gap-3">
           <Cart />
           <CurrentUser />

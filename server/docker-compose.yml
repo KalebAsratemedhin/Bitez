@@ -1,25 +1,149 @@
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "${PORT}:${PORT}"
-    env_file:
-      - .env
-    volumes:
-      - .:/app
-    depends_on:
-      - mongo
-    restart: always
-
   mongo:
     image: mongo:6
     ports:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
-    restart: always
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    restart: unless-stopped
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 25s
+
+  gateway:
+    build:
+      context: ./server/gateway
+      dockerfile: Dockerfile
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    environment:
+      AUTH_SERVICE_URL: http://auth:3001
+      RESTAURANT_SERVICE_URL: http://restaurant:3002
+      ORDER_SERVICE_URL: http://order:3003
+      DELIVERY_SERVICE_URL: http://delivery:3004
+      NOTIFICATION_SERVICE_URL: http://notification:3005
+      DASHBOARD_SERVICE_URL: http://dashboard:3006
+    depends_on:
+      - auth
+      - restaurant
+      - order
+      - delivery
+      - notification
+      - dashboard
+    restart: unless-stopped
+
+  auth:
+    build:
+      context: ./server/services/auth
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3001
+      MONGODB_URI: mongodb://mongo:27017/bitez_auth
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+      DELIVERY_SERVICE_URL: http://delivery:3004
+    depends_on:
+      - mongo
+      - rabbitmq
+      - delivery
+    restart: unless-stopped
+
+  restaurant:
+    build:
+      context: ./server/services/restaurant
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3002
+      MONGODB_URI: mongodb://mongo:27017/bitez_restaurant
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-debpwhgnx}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-987663357468171}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      DELIVERY_SERVICE_URL: http://delivery:3004
+    depends_on:
+      - mongo
+      - rabbitmq
+      - delivery
+    restart: unless-stopped
+
+  order:
+    build:
+      context: ./server/services/order
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3003
+      MONGODB_URI: mongodb://mongo:27017/bitez_order
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+      AUTH_SERVICE_URL: http://auth:3001
+      RESTAURANT_SERVICE_URL: http://restaurant:3002
+      NOTIFICATION_SERVICE_URL: http://notification:3005
+      DELIVERY_SERVICE_URL: http://delivery:3004
+      CHAPA_AUTH: ${CHAPA_AUTH:-}
+      SERVER_URL: ${SERVER_URL:-http://localhost:8080}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
+    depends_on:
+      - mongo
+      - rabbitmq
+      - auth
+      - restaurant
+    restart: unless-stopped
+
+  delivery:
+    build:
+      context: ./server/services/delivery
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3004
+      MONGODB_URI: mongodb://mongo:27017/bitez_delivery
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+      NOTIFICATION_SERVICE_URL: http://notification:3005
+      ORDER_SERVICE_URL: http://order:3003
+      AUTH_SERVICE_URL: http://auth:3001
+    depends_on:
+      mongo: { condition: service_started }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  notification:
+    build:
+      context: ./server/services/notification
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3005
+      MONGODB_URI: mongodb://mongo:27017/bitez_notification
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+    depends_on:
+      mongo: { condition: service_started }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ./server/services/dashboard
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3006
+      MONGODB_URI: mongodb://mongo:27017/bitez_dashboard
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+    depends_on:
+      mongo: { condition: service_started }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
 
 volumes:
   mongo_data:

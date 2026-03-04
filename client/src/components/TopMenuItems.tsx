@@ -26,7 +26,7 @@ function MenuItemRating({ item }: { item: MenuItem }) {
   const handleRate = async (value: number) => {
     try {
       await rateEntity({
-        entityType: "MenuItem",
+        entityType: "menu_item",
         entityId: item._id,
         rating: value,
       }).unwrap();
@@ -83,7 +83,7 @@ export default function TopMenuItems() {
       <Carousel opts={{ align: "start", loop: true }} className="w-full">
         <CarouselPrevious className="left-2 md:left-4 top-1/2 -translate-y-1/2 z-10 border-0 bg-white/95 shadow-md hover:bg-white transition-all duration-300 hover:scale-105" />
         <CarouselNext className="right-2 md:right-4 top-1/2 -translate-y-1/2 z-10 border-0 bg-white/95 shadow-md hover:bg-white transition-all duration-300 hover:scale-105" />
-        <CarouselContent className="-ml-3 md:-ml-4">
+        <CarouselContent className="-ml-3 md:-ml-4 py-2">
           {data?.map((item) => (
             <CarouselItem key={item._id} className="pl-3 md:pl-4 basis-[260px] md:basis-[280px] lg:basis-[300px]">
               <div className="group h-full flex flex-col transition-transform duration-300 hover:scale-[1.02]">

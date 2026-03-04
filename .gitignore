@@ -16,3 +16,4 @@ backend/.env.*
 
 **/.venv
 .cursor/
+node_modules/

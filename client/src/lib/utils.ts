@@ -9,12 +9,14 @@ export function cn(...inputs: ClassValue[]) {
 const apiBase = (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) ?? "";
 
 
-/** Use for img src when the API returns a path like /uploads/restaurants/... or /uploads/menus/... */
+/** Use for img src when the API returns a path like /uploads/restaurants/... or /uploads/menus/... (restaurant service). */
 export function getImageUrl(path: string | undefined | null): string {
   if (!path) return "";
   if (path.startsWith("http")) return path;
 
-  return path.startsWith("/") ? `${apiBase}${path}` : `${apiBase}/${path}`;
+  const p = path.startsWith("/") ? path : `/${path}`;
+  const gatewayPath = p.startsWith("/uploads") ? `/restaurant${p}` : p;
+  return `${apiBase}${gatewayPath}`;
 }
 
 

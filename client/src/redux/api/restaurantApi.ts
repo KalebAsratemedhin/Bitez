@@ -42,13 +42,17 @@ export const restaurantApi = api.injectEndpoints({
       providesTags: ["my-restaurants"],
     }),
 
-    rateRestaurant:  builder.mutation<GenericResponse, UpdateRestaurantRequest>({
+    rateRestaurant: builder.mutation<GenericResponse, UpdateRestaurantRequest>({
       query: ({ id, data }) => ({
-        url: `/restaurant/rate/${id}`,
+        url: `/restaurant/rating/restaurant/${id}`,
         method: 'PUT',
-        body: data,
+        body: { rating: (data as { rating?: number })?.rating },
       }),
-      invalidatesTags: ['my-restaurants'],
+      invalidatesTags: (result, error, arg) => [
+        'my-restaurants',
+        'top-restaurants',
+        ...(arg?.id ? [{ type: 'a-restaurant' as const, id: arg.id }] : []),
+      ],
     }), 
 
     getActiveRestaurants: builder.query<GetRestaurantsResponse, { page: number; limit: number; search?: string; rating?: string }>({

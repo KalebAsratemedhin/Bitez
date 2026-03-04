@@ -1,0 +1,179 @@
+import type { Request, Response } from "express";
+import type { DeliveryUseCase } from "../../application/usecases/DeliveryUseCase.js";
+import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
+
+function getUserId(req: AuthenticatedRequest): string {
+  return req.user!.id;
+}
+
+function parsePageLimit(req: Request): { page: number; limit: number } {
+  const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
+  const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit), 10) || 10));
+  return { page, limit };
+}
+
+function paginationMeta(total: number, page: number, limit: number) {
+  return { total, page, limit, totalPages: Math.ceil(total / limit) };
+}
+
+function deliveryErrorStatus(message: string): number {
+  if (message?.includes("authorized")) return 401;
+  if (message?.includes("not found")) return 404;
+  if (message?.includes("available")) return 503;
+  return 500;
+}
+
+export class DeliveryController {
+  constructor(private readonly deliveryUseCase: DeliveryUseCase) {}
+
+  createDeliveryPerson = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.body?.userId;
+      if (!userId) {
+        res.status(400).json({ success: false, message: "userId required" });
+        return;
+      }
+      const person = await this.deliveryUseCase.createDeliveryPerson({ userId: String(userId) });
+      res.status(201).json({ success: true, deliveryPerson: person });
+    } catch (e) {
+      res.status(500).json({ success: false, message: (e as Error).message });
+    }
+  };
+
+  assignDelivery = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { orderId, estimatedDeliveryTime, customerId } = req.body;
+      if (!orderId || !estimatedDeliveryTime) {
+        res.status(400).json({ success: false, message: "orderId and estimatedDeliveryTime required" });
+        return;
+      }
+      const { delivery } = await this.deliveryUseCase.assignDelivery({
+        orderId: String(orderId),
+        estimatedDeliveryTime: new Date(estimatedDeliveryTime),
+        customerId: customerId ? String(customerId) : undefined,
+      });
+      res.status(201).json({ success: true, delivery });
+    } catch (e) {
+      const message = (e as Error).message;
+      res.status(deliveryErrorStatus(message)).json({ success: false, message });
+    }
+  };
+
+  updateDeliveryStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const id = String(req.params.id ?? "").split(",")[0];
+      const delivery = await this.deliveryUseCase.updateDeliveryStatus({
+        deliveryId: id,
+        status: req.body.status,
+        userId: getUserId(req),
+      });
+      res.status(200).json({ success: true, delivery });
+    } catch (e) {
+      const message = (e as Error).message;
+      res.status(deliveryErrorStatus(message)).json({ success: false, message });
+    }
+  };
+
+  getAllDeliveries = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { page, limit } = parsePageLimit(req);
+      const { deliveries, total } = await this.deliveryUseCase.getAllDeliveries(page, limit);
+      res.json({
+        success: true,
+        data: deliveries,
+        pagination: paginationMeta(total, page, limit),
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, message: (e as Error).message });
+    }
+  };
+
+  getCustomerDeliveries = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { page, limit } = parsePageLimit(req);
+      const { deliveries, total } = await this.deliveryUseCase.getDeliveriesByCustomerId(
+        getUserId(req),
+        page,
+        limit,
+      );
+      res.status(200).json({
+        success: true,
+        data: deliveries,
+        pagination: paginationMeta(total, page, limit),
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, message: (e as Error).message });
+    }
+  };
+
+  getDeliveryPersonDeliveries = async (
+    req: AuthenticatedRequest,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const { page, limit } = parsePageLimit(req);
+      const { deliveries, total, deliveryPerson } =
+        await this.deliveryUseCase.getDeliveriesByDeliveryPersonUserId(
+          getUserId(req),
+          page,
+          limit,
+        );
+      res.status(200).json({
+        success: true,
+        data: deliveries,
+        pagination: paginationMeta(total, page, limit),
+        ...(deliveryPerson && { deliveryPerson }),
+      });
+    } catch (e) {
+      res.status(500).json({ success: false, message: (e as Error).message });
+    }
+  };
+
+  hasDeliveredToUser = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const deliveryPersonId = String(req.params.id ?? "").split(",")[0];
+      const userId = String(req.params.userId ?? "").split(",")[0];
+      if (!deliveryPersonId || !userId) {
+        res.status(400).json({ delivered: false });
+        return;
+      }
+      const delivered = await this.deliveryUseCase.hasDeliveredToCustomer(
+        deliveryPersonId,
+        userId,
+      );
+      res.json({ delivered });
+    } catch (e) {
+      res.status(500).json({ delivered: false });
+    }
+  };
+
+  getDeliveryPersonByUserId = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = String(req.params.userId ?? "").split(",")[0];
+      if (!userId) {
+        res.status(400).json({ success: false, message: "userId required" });
+        return;
+      }
+      const person = await this.deliveryUseCase.getDeliveryPersonByUserId(userId);
+      if (!person) {
+        res.status(404).json({ success: false, message: "Delivery person not found" });
+        return;
+      }
+      res.status(200).json(person);
+    } catch (e) {
+      res.status(500).json({ success: false, message: (e as Error).message });
+    }
+  };
+
+  getDeliveryPersonDashboard = async (
+    req: AuthenticatedRequest,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const result = await this.deliveryUseCase.getDeliveryPersonDashboard(getUserId(req));
+      res.status(200).json({ success: true, ...result });
+    } catch (e) {
+      res.status(500).json({ success: false, message: (e as Error).message });
+    }
+  };
+}

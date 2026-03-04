@@ -110,7 +110,8 @@ const CustomerDeliveries = () => {
     limit: 6,
   });
 
-  const deliveries = data?.data || [];
+  const rawDeliveries = data?.data || [];
+  const deliveries = Array.isArray(rawDeliveries) ? rawDeliveries.filter(Boolean) : [];
   const limit = 6;
   const totalCount = data?.pagination?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / limit));
@@ -154,22 +155,41 @@ const CustomerDeliveries = () => {
       </div>
 
       <div className="space-y-5">
-        {deliveries.map((delivery) => {
-          const deliveryPerson = delivery.deliveryPersonId?.userId;
-          const restaurant = delivery.orderId?.restaurantID;
+        {deliveries.map((delivery, index) => {
+          const orderId = delivery?.orderId;
+          const restaurant =
+            orderId && typeof orderId === "object" && "restaurantID" in orderId
+              ? (orderId as { restaurantID?: { _id?: string; name?: string } }).restaurantID
+              : undefined;
+          const restaurantIdStr =
+            restaurant != null && typeof restaurant === "object" && "_id" in restaurant
+              ? String((restaurant as { _id?: string })._id ?? "")
+              : typeof restaurant === "string"
+                ? restaurant
+                : "";
           const restaurantName =
-            restaurant && typeof restaurant === "object" && "name" in restaurant
-              ? (restaurant as { name: string }).name
+            restaurant != null && typeof restaurant === "object" && "name" in restaurant
+              ? String((restaurant as { name?: string }).name ?? "Restaurant")
               : "Restaurant";
+          const deliveryPerson =
+            delivery?.deliveryPersonId && typeof delivery.deliveryPersonId === "object" && "userId" in delivery.deliveryPersonId
+              ? (delivery.deliveryPersonId as { userId?: { _id?: string; name?: string; profileImage?: string }; _id?: string; rating?: number }).userId
+              : undefined;
+          const dpId =
+            delivery?.deliveryPersonId && typeof delivery.deliveryPersonId === "object" && "_id" in delivery.deliveryPersonId
+              ? String((delivery.deliveryPersonId as { _id?: string })._id ?? "")
+              : typeof delivery?.deliveryPersonId === "string"
+                ? delivery.deliveryPersonId
+                : "";
 
           return (
             <Card
-              key={delivery._id}
+              key={delivery?._id ?? `delivery-${index}`}
               className="overflow-hidden border border-stone-200/80 shadow-sm hover:shadow-md transition-shadow rounded-2xl"
             >
               <CardContent className="p-0">
                 <div className="p-4 sm:p-5 border-b border-stone-100 bg-stone-50/30">
-                  <DeliveryStatusStepper status={delivery.status as DeliveryStatus} />
+                  <DeliveryStatusStepper status={delivery?.status as DeliveryStatus} />
                 </div>
 
                 <div className="p-4 sm:p-5 space-y-4">
@@ -180,16 +200,20 @@ const CustomerDeliveries = () => {
                       </div>
                       <div className="min-w-0">
                         <p className="font-display font-semibold text-stone-800 truncate">
-                          <Link
-                            className="hover:text-[var(--brand)] transition-colors"
-                            href={`/restaurants/${delivery.orderId.restaurantID._id}`}
-                          >
-                            {restaurantName}
-                          </Link>
+                          {restaurantIdStr ? (
+                            <Link
+                              className="hover:text-[var(--brand)] transition-colors"
+                              href={`/restaurants/${restaurantIdStr}`}
+                            >
+                              {restaurantName}
+                            </Link>
+                          ) : (
+                            <span>{restaurantName}</span>
+                          )}
                         </p>
                         <p className="text-xs text-stone-500 flex items-center gap-1 mt-0.5">
                           <Clock className="h-3.5 w-3.5" />
-                          ETA {formatDeliveryTime(delivery.estimatedDeliveryTime)}
+                          ETA {formatDeliveryTime(delivery?.estimatedDeliveryTime)}
                         </p>
                       </div>
                     </div>
@@ -205,39 +229,37 @@ const CustomerDeliveries = () => {
                           <DialogTitle className="font-display">Delivery details</DialogTitle>
                         </DialogHeader>
                         <div className="grid gap-4">
-                          <DeliveryStatusStepper status={delivery.status as DeliveryStatus} />
-                          {delivery.orderId?.orderDetails?.length ? (
+                          <DeliveryStatusStepper status={delivery?.status as DeliveryStatus} />
+                          {orderId && typeof orderId === "object" && "orderDetails" in orderId && Array.isArray((orderId as { orderDetails?: unknown[] }).orderDetails) && (orderId as { orderDetails: unknown[] }).orderDetails.length > 0 ? (
                             <div className="rounded-xl border border-stone-200 overflow-hidden">
                               <div className="bg-stone-50 px-4 py-2.5 border-b border-stone-200 flex items-center gap-2">
                                 <Receipt className="h-4 w-4 text-[var(--brand)]" />
                                 <span className="text-sm font-medium text-stone-700">Items</span>
                               </div>
                               <ul className="divide-y divide-stone-100">
-                                {delivery.orderId.orderDetails.map(
-                                  (
-                                    {
-                                      item,
-                                      quantity,
-                                    }: { item: { _id: string; name: string; price: number }; quantity: number },
-                                    i: number
-                                  ) => (
+                                {((orderId as { orderDetails: { item?: { _id?: string; name?: string; price?: number }; quantity?: number }[] }).orderDetails).map(
+                                  (entry: { item?: { _id?: string; name?: string; price?: number }; quantity?: number }, i: number) => {
+                                    const item = entry?.item;
+                                    const quantity = entry?.quantity ?? 0;
+                                    return (
                                     <li
-                                      key={item._id ?? i}
+                                      key={item?._id ?? i}
                                       className="flex justify-between items-center px-4 py-3 text-sm"
                                     >
                                       <span className="text-stone-800">
-                                        {item.name} × <span className="font-medium">{quantity}</span>
+                                        {item?.name ?? "Item"} × <span className="font-medium">{quantity}</span>
                                       </span>
                                       <span className="text-stone-600">
-                                        ETB {(item.price * quantity).toFixed(2)}
+                                        ETB {((item?.price ?? 0) * quantity).toFixed(2)}
                                       </span>
                                     </li>
-                                  )
+                                    );
+                                  }
                                 )}
                               </ul>
                             </div>
                           ) : null}
-                          {delivery.orderId?.coordinates && (
+                          {orderId && typeof orderId === "object" && "coordinates" in orderId && (orderId as { coordinates?: { lat?: number; lng?: number } }).coordinates && (
                             <div className="rounded-xl border border-stone-200 overflow-hidden">
                               <div className="bg-stone-50 px-4 py-2.5 border-b border-stone-200 flex items-center gap-2">
                                 <MapPin className="h-4 w-4 text-[var(--brand)]" />
@@ -247,15 +269,15 @@ const CustomerDeliveries = () => {
                               </div>
                               <LeafletMap
                                 center={{
-                                  lat: delivery.orderId.coordinates.lat,
-                                  lng: delivery.orderId.coordinates.lng,
+                                  lat: (orderId as { coordinates: { lat: number; lng: number } }).coordinates.lat,
+                                  lng: (orderId as { coordinates: { lat: number; lng: number } }).coordinates.lng,
                                 }}
                                 zoom={15}
                                 height={220}
                                 className="w-full"
                                 markerPosition={{
-                                  lat: delivery.orderId.coordinates.lat,
-                                  lng: delivery.orderId.coordinates.lng,
+                                  lat: (orderId as { coordinates: { lat: number; lng: number } }).coordinates.lat,
+                                  lng: (orderId as { coordinates: { lat: number; lng: number } }).coordinates.lng,
                                 }}
                                 popupText="Delivery address"
                               />
@@ -280,12 +302,18 @@ const CustomerDeliveries = () => {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-stone-800">
-                        {deliveryPerson?.name || "Driver not assigned"}
+                        {deliveryPerson != null && typeof deliveryPerson === "object" && "name" in deliveryPerson
+                          ? String((deliveryPerson as { name?: string }).name ?? "Driver not assigned")
+                          : "Driver not assigned"}
                       </p>
-                      {delivery.deliveryPersonId?._id && delivery.status === "delivered" && (
+                      {dpId && delivery?.status === "delivered" && (
                         <DeliveryPersonRating
-                          deliveryPersonId={delivery.deliveryPersonId._id}
-                          currentRating={delivery.deliveryPersonId.rating || 0}
+                          deliveryPersonId={dpId}
+                          currentRating={
+                            delivery?.deliveryPersonId && typeof delivery.deliveryPersonId === "object" && "rating" in delivery.deliveryPersonId
+                              ? Number((delivery.deliveryPersonId as { rating?: number }).rating ?? 0)
+                              : 0
+                          }
                         />
                       )}
                     </div>

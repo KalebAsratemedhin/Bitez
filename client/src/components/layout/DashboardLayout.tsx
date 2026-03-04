@@ -7,10 +7,7 @@ import { AuthHeader } from "@/components/Header";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="flex flex-col min-h-screen w-full"
-      style={{ backgroundColor: "var(--surface-warm)" }}
-    >
+    <div className="flex flex-col min-h-screen w-full bg-[var(--surface-warm)]">
       <SidebarProvider>
         <AppSidebar />
         <main className="flex-1 w-full flex flex-col min-h-0 overflow-x-hidden">

@@ -55,9 +55,8 @@ const ProfilePage = () => {
     try {
       await updateUserProfile(formData).unwrap();
       toast.success('Profile updated successfully!');
-    } catch (err) {
+    } catch {
       toast.error('Error updating profile');
-      console.error(err);
     }
   };
 
