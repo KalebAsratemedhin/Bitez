@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import morgan from "morgan";
-
+import { createLogger } from "@bitez/logger";
 import connectDB from "./infrastructure/config/db.js";
 import { AuthUseCase } from "./application/usecases/AuthUseCase.js";
 import { AuthController } from "./infrastructure/controllers/AuthController.js";
@@ -12,6 +12,8 @@ import { TokenService } from "./infrastructure/services/TokenService.js";
 import { RabbitMQEventPublisher } from "./infrastructure/messaging/RabbitMQEventPublisher.js";
 import { createAuthRoutes } from "./infrastructure/web/authRoutes.js";
 
+const SERVICE_NAME = "auth";
+const logger = createLogger({ serviceName: SERVICE_NAME });
 const app = express();
 app.use(morgan("combined"));
 app.use(express.json());
@@ -39,7 +41,7 @@ const authUseCase = new AuthUseCase({
 const authController = new AuthController(authUseCase);
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "auth" });
+  res.json({ status: "ok", service: SERVICE_NAME });
 });
 
 app.use("/", createAuthRoutes(authController));
@@ -47,6 +49,7 @@ app.use("/", createAuthRoutes(authController));
 async function start() {
   await connectDB();
   app.listen(PORT, "0.0.0.0");
+  logger.info({ port: PORT }, "Auth service started");
 }
 
 start().catch(() => process.exit(1));

@@ -2,7 +2,10 @@ import express from "express";
 import morgan from "morgan";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import cors from "cors";
+import { createLogger } from "@bitez/logger";
 
+const SERVICE_NAME = "gateway";
+const logger = createLogger({ serviceName: SERVICE_NAME });
 const app = express();
 app.use(morgan("combined"));
 
@@ -38,5 +41,6 @@ app.use("/delivery", createProxyMiddleware({ target: deliveryUrl, ...proxyOption
 app.use("/notification", createProxyMiddleware({ target: notificationUrl, pathRewrite: { "^/notification": "" }, ...proxyOptions }));
 app.use("/dashboard", createProxyMiddleware({ target: dashboardUrl, pathRewrite: { "^/dashboard": "" }, ...proxyOptions }));
 
-app.get("/health", (_req, res) => res.json({ status: "ok", service: "gateway" }));
+app.get("/health", (_req, res) => res.json({ status: "ok", service: SERVICE_NAME }));
 app.listen(PORT, "0.0.0.0");
+logger.info({ port: PORT }, "Gateway started");

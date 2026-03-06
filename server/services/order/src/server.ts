@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import morgan from "morgan";
+import { createLogger } from "@bitez/logger";
 import connectDB from "./infrastructure/config/db.js";
 import { OrderRepository } from "./infrastructure/repositories/OrderRepository.js";
 import { OrderUseCase } from "./application/usecases/OrderUseCase.js";
@@ -10,11 +11,16 @@ import { HttpRestaurantRepository } from "./infrastructure/services/HttpRestaura
 import { EventNotificationService } from "./infrastructure/services/EventNotificationService.js";
 import { RabbitMQEventPublisher } from "./infrastructure/messaging/RabbitMQEventPublisher.js";
 import { HttpUserRepository } from "./infrastructure/services/HttpUserRepository.js";
-import { HttpDeliveryAssignmentService } from "./infrastructure/services/HttpDeliveryAssignmentService.js";
 import { TokenService } from "./infrastructure/services/TokenService.js";
 import { ChapaPaymentGateway } from "./infrastructure/services/ChapaPaymentGateway.js";
+import { startDeliveryCreatedConsumer } from "./infrastructure/messaging/deliveryCreatedConsumer.js";
+import { startRestaurantEventConsumer } from "./infrastructure/messaging/restaurantEventConsumer.js";
+import { startUserRegisteredConsumer } from "./infrastructure/messaging/userRegisteredConsumer.js";
+import { RestaurantReadModelRepository } from "./infrastructure/repositories/RestaurantReadModelRepository.js";
+import { UserReadModelRepository } from "./infrastructure/repositories/UserReadModelRepository.js";
 
 const SERVICE_NAME = "order";
+const logger = createLogger({ serviceName: SERVICE_NAME });
 
 const app = express();
 app.use(morgan("combined"));
@@ -33,6 +39,8 @@ async function start() {
   const restaurantRepository = new HttpRestaurantRepository(
     process.env.RESTAURANT_SERVICE_URL || "http://restaurant:3002",
   );
+  const restaurantReadModelRepository = new RestaurantReadModelRepository();
+  const userReadModelRepository = new UserReadModelRepository();
   const eventPublisher = new RabbitMQEventPublisher(
     process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672",
   );
@@ -40,13 +48,15 @@ async function start() {
   const userRepository = new HttpUserRepository(
     process.env.AUTH_SERVICE_URL || "http://auth:3001",
   );
-  const deliveryAssignmentService = new HttpDeliveryAssignmentService(
-    process.env.DELIVERY_SERVICE_URL || "http://delivery:3004",
-  );
+
   const tokenService = new TokenService(process.env.JWT_SECRET || "dev-secret");
   const paymentGateway = new ChapaPaymentGateway(process.env.CHAPA_AUTH || "");
   const authBase = (process.env.AUTH_SERVICE_URL || "http://auth:3001").replace(/\/$/, "");
   const getCustomerById = async (id: string) => {
+    const fromReadModel = await userReadModelRepository.findById(id);
+    if (fromReadModel) {
+      return { _id: fromReadModel.userId, name: fromReadModel.name, phoneNumber: fromReadModel.phoneNumber };
+    }
     try {
       const res = await fetch(`${authBase}/internal/user/${encodeURIComponent(id)}`);
       if (!res.ok) return null;
@@ -59,14 +69,19 @@ async function start() {
   const orderUseCase = new OrderUseCase({
     orderRepository,
     restaurantRepository,
+    restaurantReadModelRepository,
     notificationService,
-    deliveryAssignmentService,
     userRepository,
     paymentGateway,
     tokenService,
     eventPublisher,
     getCustomerById,
   });
+
+  const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
+  await startRestaurantEventConsumer(rabbitUrl, restaurantReadModelRepository, logger);
+  await startUserRegisteredConsumer(rabbitUrl, userReadModelRepository, logger);
+  await startDeliveryCreatedConsumer(rabbitUrl, orderRepository, notificationService, logger);
 
   const orderController = new OrderController(orderUseCase);
   app.use("/", createOrderRoutes(orderController));

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import morgan from "morgan";
+import { createLogger } from "@bitez/logger";
 import connectDB from "./infrastructure/config/db.js";
 import { DeliveryRepository } from "./infrastructure/repositories/DeliveryRepository.js";
 import { DeliveryPersonRepository } from "./infrastructure/repositories/DeliveryPersonRepository.js";
@@ -11,8 +12,13 @@ import { EventNotificationService } from "./infrastructure/services/EventNotific
 import { RabbitMQEventPublisher } from "./infrastructure/messaging/RabbitMQEventPublisher.js";
 import { startUserRegisteredConsumer } from "./infrastructure/messaging/userRegisteredConsumer.js";
 import { startDeliveryPersonRatingUpdatedConsumer } from "./infrastructure/messaging/deliveryPersonRatingUpdatedConsumer.js";
-
+import { startOrderReadyForDeliveryConsumer } from "./infrastructure/messaging/orderReadyForDeliveryConsumer.js";
+import { startOrderEventConsumer } from "./infrastructure/messaging/orderEventConsumer.js";
+import { UnassignedOrderRepository } from "./infrastructure/repositories/UnassignedOrderRepository.js";
+import { OrderReadModelRepository } from "./infrastructure/repositories/OrderReadModelRepository.js";
+import { UserReadModelRepository } from "./infrastructure/repositories/UserReadModelRepository.js";
 const SERVICE_NAME = "delivery";
+const logger = createLogger({ serviceName: SERVICE_NAME });
 
 const app = express();
 app.use(morgan("combined"));
@@ -29,22 +35,36 @@ async function start() {
 
   const deliveryRepository = new DeliveryRepository();
   const deliveryPersonRepository = new DeliveryPersonRepository();
+  const unassignedOrderRepository = new UnassignedOrderRepository();
+  const orderReadModelRepository = new OrderReadModelRepository();
+  const userReadModelRepository = new UserReadModelRepository();
   const eventPublisher = new RabbitMQEventPublisher(
     process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672",
   );
+  
   const notificationService = new EventNotificationService(eventPublisher);
   const orderBase = (process.env.ORDER_SERVICE_URL || "http://order:3003").replace(/\/$/, "");
   const authBase = (process.env.AUTH_SERVICE_URL || "http://auth:3001").replace(/\/$/, "");
+  
   const getOrderByIdEnriched = async (orderId: string) => {
     try {
       const res = await fetch(`${orderBase}/internal/order/${encodeURIComponent(orderId)}`);
       if (!res.ok) return null;
+
       return (await res.json()) as unknown;
     } catch {
       return null;
     }
   };
   const getUserById = async (userId: string) => {
+    const fromReadModel = await userReadModelRepository.findById(userId);
+    if (fromReadModel) {
+      return {
+        _id: fromReadModel.userId,
+        name: fromReadModel.name,
+        phoneNumber: fromReadModel.phoneNumber,
+      };
+    }
     try {
       const res = await fetch(`${authBase}/internal/user/${encodeURIComponent(userId)}`);
       if (!res.ok) return null;
@@ -57,6 +77,8 @@ async function start() {
   const deliveryUseCase = new DeliveryUseCase({
     deliveryRepository,
     deliveryPersonRepository,
+    unassignedOrderRepository,
+    orderReadModelRepository,
     notificationService,
     eventPublisher,
     getOrderByIdEnriched,
@@ -64,11 +86,14 @@ async function start() {
   });
 
   const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
-  await startUserRegisteredConsumer(rabbitUrl, deliveryUseCase);
+  await startOrderEventConsumer(rabbitUrl, orderReadModelRepository, logger);
+  await startUserRegisteredConsumer(rabbitUrl, deliveryUseCase, userReadModelRepository, logger);
   await startDeliveryPersonRatingUpdatedConsumer(rabbitUrl, deliveryPersonRepository);
+  await startOrderReadyForDeliveryConsumer(rabbitUrl, deliveryUseCase, logger);
 
   const deliveryController = new DeliveryController(deliveryUseCase);
   const deliveryRoutes = createDeliveryRoutes(deliveryController);
+
   app.use("/delivery", deliveryRoutes);
   app.use("/", deliveryRoutes);
 

@@ -1,42 +1,96 @@
-import Menu from "../persistence/models/Menu.js";
+import Menu from "../persistence/models/Menu.ts";
 import mongoose from "mongoose";
-import type { IMenuRepository, MenuItemInput } from "../../domain/interfaces/MenuRepository.js";
+import type {
+  IMenuRepository,
+  MenuItemInput,
+  CreateMenuData,
+  UpdateMenuData,
+  MenuItemWithRestaurant,
+} from "@domain/interfaces/MenuRepository.ts";
+import type { Menu as MenuEntity, MenuItem } from "@domain/entities/Menu.ts";
+
+function toMenuItem(item: Record<string, unknown>): MenuItem {
+  return {
+    _id: String(item._id ?? ""),
+    name: String(item.name ?? ""),
+    description: String(item.description ?? ""),
+    price: Number(item.price ?? 0),
+    itemPicture: String(item.itemPicture ?? ""),
+  };
+}
+
+function toMenu(doc: Record<string, unknown>): MenuEntity {
+  const rawItems = Array.isArray(doc.menuItems) ? doc.menuItems : [];
+
+  return {
+    _id: String(doc._id ?? ""),
+    menuName: String(doc.menuName ?? ""),
+    restaurantId: String(doc.restaurantId ?? ""),
+    menuItems: rawItems.map((i: Record<string, unknown>) => toMenuItem(i)),
+    createdAt: doc.createdAt instanceof Date ? doc.createdAt : undefined,
+    updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt : undefined,
+  };
+}
+
+function toMenuItemWithRestaurant(row: Record<string, unknown>): MenuItemWithRestaurant {
+  return {
+    _id: String(row._id ?? ""),
+    name: String(row.name ?? ""),
+    description: String(row.description ?? ""),
+    price: Number(row.price ?? 0),
+    itemPicture: String(row.itemPicture ?? ""),
+    restaurantId: String(row.restaurantId ?? ""),
+  };
+}
 
 export class MenuRepository implements IMenuRepository {
-  async create(data: {
-    menuName: string;
-    restaurantId: string;
-    menuItems: MenuItemInput[];
-  }) {
+  async create(data: CreateMenuData): Promise<MenuEntity> {
     const doc = await Menu.create({
       menuName: data.menuName,
       restaurant: new mongoose.Types.ObjectId(data.restaurantId),
       menuItems: data.menuItems,
     });
-    return doc;
+
+    return toMenu(doc.toObject());
   }
 
-  async findById(id: string) {
-    return Menu.findById(id).lean();
+  async findById(id: string): Promise<MenuEntity | null> {
+    
+    const doc = await Menu.findById(id).lean();
+    if (!doc) return null;
+
+    return toMenu(doc);
   }
 
-  async findByRestaurantId(restaurantId: string) {
-    return Menu.find({ restaurant: new mongoose.Types.ObjectId(restaurantId) }).lean();
+  async findByRestaurantId(restaurantId: string): Promise<MenuEntity[]> {
+    const docs = await Menu.find({
+      restaurant: new mongoose.Types.ObjectId(restaurantId),
+    }).lean();
+
+    return (docs).map(toMenu);
   }
 
   async findByIdAndUpdate(
     id: string,
-    update: { menuName?: string; menuItems?: MenuItemInput[] }
-  ) {
-    return Menu.findByIdAndUpdate(id, update, { new: true }).lean();
+    update: UpdateMenuData,
+  ): Promise<MenuEntity | null> {
+    
+    const doc = await Menu.findByIdAndUpdate(id, update, { new: true }).lean();
+    if (!doc) return null;
+
+    return toMenu(doc);
   }
 
-  async findByIdAndDelete(id: string) {
-    return Menu.findByIdAndDelete(id).lean();
+  async findByIdAndDelete(id: string): Promise<MenuEntity | null> {
+    const doc = await Menu.findByIdAndDelete(id).lean();
+    if (!doc) return null;
+    return toMenu(doc);
   }
 
-  async findMenuItemsByIds(ids: string[]) {
+  async findMenuItemsByIds(ids: string[]): Promise<MenuItemWithRestaurant[]> {
+    
     if (ids.length === 0) return [];
+
     const objectIds = ids.map((id) => new mongoose.Types.ObjectId(id));
     const result = await Menu.aggregate([
       { $unwind: "$menuItems" },
@@ -52,11 +106,10 @@ export class MenuRepository implements IMenuRepository {
         },
       },
     ]).exec();
-    return result as { _id: unknown; name: string; description: string; price: number; itemPicture: string; restaurantId: unknown }[];
+    return (result).map(toMenuItemWithRestaurant);
   }
 
-  /** Return up to `limit` menu items from any menus (for fallback when no ratings exist). */
-  async findSomeMenuItems(limit: number): Promise<{ _id: unknown; name: string; description: string; price: number; itemPicture: string; restaurantId: unknown }[]> {
+  async findSomeMenuItems(limit: number): Promise<MenuItemWithRestaurant[]> {
     const result = await Menu.aggregate([
       { $unwind: "$menuItems" },
       {
@@ -71,6 +124,7 @@ export class MenuRepository implements IMenuRepository {
       },
       { $limit: limit },
     ]).exec();
-    return result as { _id: unknown; name: string; description: string; price: number; itemPicture: string; restaurantId: unknown }[];
+
+    return (result).map(toMenuItemWithRestaurant);
   }
 }

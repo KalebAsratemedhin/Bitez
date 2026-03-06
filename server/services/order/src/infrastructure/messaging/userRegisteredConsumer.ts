@@ -1,0 +1,41 @@
+import amqp from "amqplib";
+import type { Logger } from "@bitez/logger";
+import type { IUserReadModelRepository } from "../../domain/interfaces/UserReadModelRepository.js";
+
+const EXCHANGE = "bitez";
+const QUEUE = "order.user.registered";
+const ROUTING_KEY = "user.registered";
+
+export async function startUserRegisteredConsumer(
+  url: string,
+  userReadModel: IUserReadModelRepository,
+  logger: Logger
+): Promise<void> {
+  const log = logger.child({ event: ROUTING_KEY, queue: QUEUE });
+  const connection = await amqp.connect(url);
+  const channel = await connection.createChannel();
+  await channel.assertExchange(EXCHANGE, "topic", { durable: true });
+  await channel.assertQueue(QUEUE, { durable: true });
+  await channel.bindQueue(QUEUE, EXCHANGE, ROUTING_KEY);
+  channel.prefetch(1);
+
+  // Idempotent: upsert by userId.
+  await channel.consume(QUEUE, async (msg: amqp.ConsumeMessage | null) => {
+    if (!msg) return;
+    try {
+      const p = JSON.parse(msg.content.toString()) as Record<string, unknown>;
+      const userId = String(p.userId ?? p._id ?? "");
+      const name = String(p.name ?? "");
+      const email = String(p.email ?? "");
+      const phoneNumber = p.phoneNumber != null ? String(p.phoneNumber) : undefined;
+      if (userId) {
+        await userReadModel.upsert({ userId, name, email, phoneNumber });
+        log.info({ userId }, "user read model upserted");
+      }
+      channel.ack(msg);
+    } catch (err) {
+      log.error({ err }, "user.registered consumer error");
+      channel.nack(msg, false, true);
+    }
+  });
+}

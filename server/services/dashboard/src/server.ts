@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import morgan from "morgan";
+import { createLogger } from "@bitez/logger";
 import connectDB from "./infrastructure/config/db.js";
 import { createDashboardReadModelsAdapter } from "./infrastructure/repositories/DashboardReadModelsAdapter.js";
 import { DashboardUseCase } from "./application/usecases/DashboardUseCase.js";
@@ -9,7 +10,7 @@ import { createDashboardRoutes } from "./infrastructure/web/dashboardRoutes.js";
 import { startDashboardEventConsumers } from "./infrastructure/messaging/dashboardEventConsumers.js";
 
 const SERVICE_NAME = "dashboard";
-
+const logger = createLogger({ serviceName: SERVICE_NAME });
 const app = express();
 app.use(morgan("combined"));
 app.use(express.json());
@@ -28,7 +29,7 @@ async function start() {
   const dashboardController = new DashboardController(dashboardUseCase);
 
   const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
-  await startDashboardEventConsumers(rabbitUrl);
+  await startDashboardEventConsumers(rabbitUrl, logger);
 
   app.use("/", createDashboardRoutes(dashboardController));
 

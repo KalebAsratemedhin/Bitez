@@ -40,25 +40,6 @@ export class DeliveryController {
     }
   };
 
-  assignDelivery = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { orderId, estimatedDeliveryTime, customerId } = req.body;
-      if (!orderId || !estimatedDeliveryTime) {
-        res.status(400).json({ success: false, message: "orderId and estimatedDeliveryTime required" });
-        return;
-      }
-      const { delivery } = await this.deliveryUseCase.assignDelivery({
-        orderId: String(orderId),
-        estimatedDeliveryTime: new Date(estimatedDeliveryTime),
-        customerId: customerId ? String(customerId) : undefined,
-      });
-      res.status(201).json({ success: true, delivery });
-    } catch (e) {
-      const message = (e as Error).message;
-      res.status(deliveryErrorStatus(message)).json({ success: false, message });
-    }
-  };
-
   updateDeliveryStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const id = String(req.params.id ?? "").split(",")[0];

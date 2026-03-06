@@ -8,6 +8,7 @@
     "dev": "tsx watch src/server.ts"
   },
   "dependencies": {
+    "@bitez/logger": "file:../../packages/logger",
     "amqplib": "^0.10.4",
     "cloudinary": "^2.5.1",
     "dotenv": "^16.4.7",

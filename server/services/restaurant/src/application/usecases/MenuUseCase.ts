@@ -1,24 +1,29 @@
-import type { IMenuRepository, MenuItemInput } from "../../domain/interfaces/MenuRepository.js";
-import type { IRestaurantRepository } from "../../domain/interfaces/index.js";
+import type {
+  IMenuRepository,
+  MenuItemInput,
+  CreateMenuData,
+  UpdateMenuData,
+} from "@domain/interfaces/MenuRepository.ts";
+import type { IRestaurantRepository } from "@domain/interfaces/index.ts";
+import type { Restaurant } from "@domain/entities/Restaurant.ts";
+import type { Menu } from "@domain/entities/Menu.ts";
 import type {
   CreateMenuInput,
   UpdateMenuInput,
   GetMenuByRestaurantInput,
   GetMenuByIdInput,
   DeleteMenuInput,
-} from "../dto/menu.dto.js";
+} from "@application/dto/menu.dto.ts";
 
 export interface MenuUseCaseDeps {
   menuRepository: IMenuRepository;
   restaurantRepository: IRestaurantRepository;
 }
 
-function getOwnerId(restaurant: unknown): string | null {
-  const r = restaurant as { ownerId?: { _id?: unknown } | unknown };
-  const o = r.ownerId;
-  if (o && typeof o === "object" && "_id" in o) return String((o as { _id: unknown })._id);
-  if (o != null) return String(o);
-  return null;
+function ownerIdString(restaurant: Restaurant): string {
+  return typeof restaurant.ownerId === "string"
+    ? restaurant.ownerId
+    : restaurant.ownerId._id;
 }
 
 export class MenuUseCase {
@@ -26,18 +31,23 @@ export class MenuUseCase {
 
   private async assertRestaurantOwner(restaurantId: string, userId: string): Promise<void> {
     const restaurant = await this.deps.restaurantRepository.findById(restaurantId);
+    
     if (!restaurant) throw new Error("Restaurant not found");
-    const ownerId = getOwnerId(restaurant);
-    if (ownerId !== userId) throw new Error("Not the owner of this restaurant");
+    if (ownerIdString(restaurant) !== userId) {
+      throw new Error("Not the owner of this restaurant");
+    }
   }
 
-  async create(input: CreateMenuInput): Promise<unknown> {
+  async create(input: CreateMenuInput): Promise<Menu> {
     const { restaurantId, userId, menuName, menuItems, itemPicturePaths } = input;
+    
     if (!menuName?.trim()) throw new Error("Menu name is required");
     if (!Array.isArray(menuItems) || menuItems.length === 0) {
       throw new Error("At least one menu item is required");
     }
+
     await this.assertRestaurantOwner(restaurantId, userId);
+
     const paths = itemPicturePaths ?? [];
     const items: MenuItemInput[] = menuItems.map((item, i) => ({
       name: item.name ?? "",
@@ -45,31 +55,33 @@ export class MenuUseCase {
       price: Number(item.price) || 0,
       itemPicture: paths[i] ?? item.itemPicture ?? "",
     }));
-    return this.deps.menuRepository.create({
+
+    const data: CreateMenuData = {
       menuName: menuName.trim(),
       restaurantId,
       menuItems: items,
-    });
+    };
+
+    return this.deps.menuRepository.create(data);
   }
 
-  async getByRestaurantId(input: GetMenuByRestaurantInput): Promise<unknown[]> {
+  async getByRestaurantId(input: GetMenuByRestaurantInput): Promise<Menu[]> {
     return this.deps.menuRepository.findByRestaurantId(input.restaurantId);
   }
 
-  async getById(input: GetMenuByIdInput): Promise<unknown | null> {
+  async getById(input: GetMenuByIdInput): Promise<Menu | null> {
     return this.deps.menuRepository.findById(input.menuId);
   }
 
-  async update(input: UpdateMenuInput): Promise<unknown> {
-    const { menuId, userId, menuName, menuItems, itemPicturePaths } = input;
+  async update(input: UpdateMenuInput): Promise<Menu | null> {
+    const { menuId, userId, menuName, menuItems } = input;
     const menu = await this.deps.menuRepository.findById(menuId);
+
     if (!menu) throw new Error("Menu not found");
-    const m = menu as { restaurant?: unknown };
-    const restaurantId = m.restaurant && typeof m.restaurant === "object" && "_id" in m.restaurant
-      ? String((m.restaurant as { _id: unknown })._id)
-      : String(m.restaurant);
-    await this.assertRestaurantOwner(restaurantId, userId);
-    const update: { menuName?: string; menuItems?: MenuItemInput[] } = {};
+
+    await this.assertRestaurantOwner(menu.restaurantId, userId);
+
+    const update: UpdateMenuData = {};
     if (menuName !== undefined) update.menuName = menuName.trim();
     if (menuItems !== undefined) {
       update.menuItems = menuItems.map((item) => ({
@@ -79,18 +91,18 @@ export class MenuUseCase {
         itemPicture: item.itemPicture ?? "",
       }));
     }
-    return this.deps.menuRepository.findByIdAndUpdate(menuId, update) as Promise<unknown>;
+
+    return this.deps.menuRepository.findByIdAndUpdate(menuId, update);
   }
 
-  async delete(input: DeleteMenuInput): Promise<unknown> {
+  async delete(input: DeleteMenuInput): Promise<Menu | null> {
     const { menuId, userId } = input;
     const menu = await this.deps.menuRepository.findById(menuId);
+
     if (!menu) throw new Error("Menu not found");
-    const m = menu as { restaurant?: unknown };
-    const restaurantId = m.restaurant && typeof m.restaurant === "object" && "_id" in m.restaurant
-      ? String((m.restaurant as { _id: unknown })._id)
-      : String(m.restaurant);
-    await this.assertRestaurantOwner(restaurantId, userId);
-    return this.deps.menuRepository.findByIdAndDelete(menuId) as Promise<unknown>;
+
+    await this.assertRestaurantOwner(menu.restaurantId, userId);
+    
+    return this.deps.menuRepository.findByIdAndDelete(menuId);
   }
 }

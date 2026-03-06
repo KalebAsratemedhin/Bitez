@@ -1,3 +1,5 @@
+import type { Menu, MenuItem } from "@domain/entities/Menu.ts";
+
 export interface MenuItemInput {
   name: string;
   description: string;
@@ -5,13 +7,32 @@ export interface MenuItemInput {
   itemPicture?: string;
 }
 
+export interface CreateMenuData {
+  menuName: string;
+  restaurantId: string;
+  menuItems: MenuItemInput[];
+}
+
+export interface UpdateMenuData {
+  menuName?: string;
+  menuItems?: MenuItemInput[];
+}
+
+export interface MenuItemWithRestaurant {
+  _id: string;
+  name: string;
+  description: string;
+  price: number;
+  itemPicture: string;
+  restaurantId: string;
+}
+
 export interface IMenuRepository {
-  create(data: { menuName: string; restaurantId: string; menuItems: MenuItemInput[] }): Promise<unknown>;
-  findById(id: string): Promise<unknown | null>;
-  findByRestaurantId(restaurantId: string): Promise<unknown[]>;
-  findByIdAndUpdate(
-    id: string,
-    update: { menuName?: string; menuItems?: MenuItemInput[] }
-  ): Promise<unknown | null>;
-  findByIdAndDelete(id: string): Promise<unknown | null>;
+  create(data: CreateMenuData): Promise<Menu>;
+  findById(id: string): Promise<Menu | null>;
+  findByRestaurantId(restaurantId: string): Promise<Menu[]>;
+  findByIdAndUpdate(id: string, update: UpdateMenuData): Promise<Menu | null>;
+  findByIdAndDelete(id: string): Promise<Menu | null>;
+  findMenuItemsByIds(ids: string[]): Promise<MenuItemWithRestaurant[]>;
+  findSomeMenuItems(limit: number): Promise<MenuItemWithRestaurant[]>;
 }

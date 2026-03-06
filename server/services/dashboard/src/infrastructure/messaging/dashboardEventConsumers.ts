@@ -1,4 +1,5 @@
 import amqp from "amqplib";
+import type { Logger } from "@bitez/logger";
 import {
   upsertOrderReadModel,
   upsertRestaurantReadModel,
@@ -23,7 +24,8 @@ const ROUTING_KEYS = {
   deliveryUpdated: "delivery.updated",
 } as const;
 
-export async function startDashboardEventConsumers(url: string): Promise<void> {
+export async function startDashboardEventConsumers(url: string, logger: Logger): Promise<void> {
+  const log = logger.child({ component: "dashboardEventConsumers" });
   const connection = await amqp.connect(url);
   const channel = await connection.createChannel();
   await channel.assertExchange(EXCHANGE, EXCHANGE_TYPE, { durable: true });
@@ -42,7 +44,8 @@ export async function startDashboardEventConsumers(url: string): Promise<void> {
         const payload = JSON.parse(msg.content.toString()) as Record<string, unknown>;
         await handler(payload);
         channel.ack(msg);
-      } catch {
+      } catch (err) {
+        log.error({ err, queue }, "Dashboard event consumer error");
         channel.nack(msg, false, true);
       }
     });

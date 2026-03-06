@@ -2,13 +2,18 @@ import express from "express";
 import type { RestaurantController } from "../controllers/RestaurantController.js";
 import type { RatingRepository } from "../repositories/RatingRepository.js";
 import type { IEventPublisher } from "../../domain/interfaces/EventPublisher.js";
+import type { IDeliveredToRepository } from "../../domain/interfaces/DeliveredToRepository.js";
 import { isAuthenticated, optionalAuth } from "./middlewares/auth.js";
 import type { AuthenticatedRequest } from "./middlewares/auth.js";
 
 export function createRatingRoutes(
   restaurantController: RestaurantController,
   ratingRepository: RatingRepository,
-  options?: { deliveryServiceUrl: string; eventPublisher: IEventPublisher },
+  options?: {
+    deliveryServiceUrl?: string;
+    eventPublisher: IEventPublisher;
+    deliveredToRepository?: IDeliveredToRepository;
+  },
 ): express.Router {
   const router = express.Router();
 
@@ -39,21 +44,26 @@ export function createRatingRoutes(
 
     const normalizedType = entityType.toLowerCase();
     if (normalizedType === "delivery_person") {
-      const { deliveryServiceUrl, eventPublisher } = options ?? {};
-      if (!deliveryServiceUrl || !eventPublisher) {
+      const { eventPublisher, deliveredToRepository, deliveryServiceUrl } = options ?? {};
+      if (!eventPublisher) {
         res.status(503).json({ error: "Delivery person rating is not configured." });
         return;
       }
-      const base = deliveryServiceUrl.replace(/\/$/, "");
-      const url = `${base}/delivery-person/${encodeURIComponent(entityId)}/delivered-to/${encodeURIComponent(userId)}`;
       let delivered = false;
-      try {
-        const resp = await fetch(url);
-        if (resp.ok) {
-          const data = (await resp.json()) as { delivered?: boolean };
-          delivered = Boolean(data.delivered);
+      if (deliveredToRepository) {
+        delivered = await deliveredToRepository.hasDeliveredTo(entityId, userId);
+      } else if (deliveryServiceUrl) {
+        const base = deliveryServiceUrl.replace(/\/$/, "");
+        const url = `${base}/delivery-person/${encodeURIComponent(entityId)}/delivered-to/${encodeURIComponent(userId)}`;
+        try {
+          const resp = await fetch(url);
+          if (resp.ok) {
+            const data = (await resp.json()) as { delivered?: boolean };
+            delivered = Boolean(data.delivered);
+          }
+        } catch {
+          // leave delivered false
         }
-      } catch {
       }
       if (!delivered) {
         res.status(403).json({

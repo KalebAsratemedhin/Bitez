@@ -3,6 +3,7 @@ import express from "express";
 import morgan from "morgan";
 import path from "path";
 
+import { createLogger } from "@bitez/logger";
 import connectDB from "./infrastructure/config/db.js";
 import { RestaurantUseCase } from "./application/usecases/RestaurantUseCase.js";
 import { MenuUseCase } from "./application/usecases/MenuUseCase.js";
@@ -11,10 +12,12 @@ import { MenuController } from "./infrastructure/controllers/MenuController.js";
 import { RestaurantRepository } from "./infrastructure/repositories/RestaurantRepository.js";
 import { MenuRepository } from "./infrastructure/repositories/MenuRepository.js";
 import { RatingRepository } from "./infrastructure/repositories/RatingRepository.js";
+import { DeliveredToRepository } from "./infrastructure/repositories/DeliveredToRepository.js";
 import { createRestaurantRoutes } from "./infrastructure/web/restaurantRoutes.js";
 import { createMenuRoutes } from "./infrastructure/web/menuRoutes.js";
 import { createRatingRoutes } from "./infrastructure/web/ratingRoutes.js";
 import { RabbitMQEventPublisher } from "./infrastructure/messaging/RabbitMQEventPublisher.js";
+import { startDeliveryDeliveredConsumer } from "./infrastructure/messaging/deliveryDeliveredConsumer.js";
 import { CloudinaryService } from "./infrastructure/services/CloudinaryService.js";
 
 const app = express();
@@ -22,13 +25,17 @@ app.use(morgan("combined"));
 app.use(express.json());
 
 const PORT = Number(process.env.PORT) || 3002;
+const SERVICE_NAME = "restaurant";
+const logger = createLogger({ serviceName: SERVICE_NAME });
 
 const restaurantRepository = new RestaurantRepository();
 const menuRepository = new MenuRepository();
 const ratingRepository = new RatingRepository();
+const deliveredToRepository = new DeliveredToRepository();
 const eventPublisher = new RabbitMQEventPublisher(
   process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672",
 );
+const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
 const cloudinary = new CloudinaryService({
   cloudName: process.env.CLOUDINARY_CLOUD_NAME || "debpwhgnx",
   apiKey: process.env.CLOUDINARY_API_KEY || "987663357468171",
@@ -59,6 +66,7 @@ app.use(
   createRatingRoutes(restaurantController, ratingRepository, {
     deliveryServiceUrl,
     eventPublisher,
+    deliveredToRepository,
   }),
 );
 app.use("/menu", createMenuRoutes(menuController));
@@ -68,6 +76,7 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 async function start() {
   await connectDB();
+  await startDeliveryDeliveredConsumer(rabbitUrl, deliveredToRepository, logger);
   app.listen(PORT, "0.0.0.0");
 }
 

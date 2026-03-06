@@ -1,4 +1,5 @@
 import amqp from "amqplib";
+import type { Logger } from "@bitez/logger";
 import type { NotificationUseCase } from "../../application/usecases/NotificationUseCase.js";
 
 const EXCHANGE = "bitez";
@@ -9,7 +10,9 @@ const ROUTING_KEY = "notification.requested";
 export async function startNotificationRequestedConsumer(
   url: string,
   notificationUseCase: NotificationUseCase,
+  logger: Logger,
 ): Promise<void> {
+  const log = logger.child({ event: ROUTING_KEY, queue: QUEUE });
   const connection = await amqp.connect(url);
   const channel = await connection.createChannel();
   await channel.assertExchange(EXCHANGE, EXCHANGE_TYPE, { durable: true });
@@ -33,7 +36,8 @@ export async function startNotificationRequestedConsumer(
         });
       }
       channel.ack(msg);
-    } catch {
+    } catch (err) {
+      log.error({ err }, "notification.requested consumer error");
       channel.nack(msg, false, true);
     }
   });

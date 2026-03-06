@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import morgan from "morgan";
+import { createLogger } from "@bitez/logger";
 import connectDB from "./infrastructure/config/db.js";
 import { NotificationRepository } from "./infrastructure/repositories/NotificationRepository.js";
 import { NotificationUseCase } from "./application/usecases/NotificationUseCase.js";
@@ -9,7 +10,7 @@ import { createNotificationRoutes } from "./infrastructure/web/notificationRoute
 import { startNotificationRequestedConsumer } from "./infrastructure/messaging/notificationRequestedConsumer.js";
 
 const SERVICE_NAME = "notification";
-
+const logger = createLogger({ serviceName: SERVICE_NAME });
 const app = express();
 app.use(morgan("combined"));
 app.use(express.json());
@@ -27,7 +28,7 @@ async function start() {
   const notificationUseCase = new NotificationUseCase({ notificationRepository });
 
   const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
-  await startNotificationRequestedConsumer(rabbitUrl, notificationUseCase);
+  await startNotificationRequestedConsumer(rabbitUrl, notificationUseCase, logger);
 
   const notificationController = new NotificationController(notificationUseCase);
   app.use("/", createNotificationRoutes(notificationController));

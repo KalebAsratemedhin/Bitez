@@ -1,4 +1,5 @@
 import type { IRestaurantRepository, IEventPublisher } from "../../domain/interfaces/index.js";
+import type { Restaurant } from "../../domain/entities/Restaurant.js";
 import type {
   GetRestaurantsByOwnerInput,
   GetRestaurantsByOwnerResult,
@@ -14,103 +15,97 @@ export interface RestaurantUseCaseDeps {
   eventPublisher: IEventPublisher;
 }
 
+function ownerIdString(restaurant: Restaurant): string {
+  return typeof restaurant.ownerId === "string"
+    ? restaurant.ownerId
+    : restaurant.ownerId._id;
+}
+
 export class RestaurantUseCase {
   constructor(private readonly deps: RestaurantUseCaseDeps) {}
 
-  async getById(restaurantId: string): Promise<unknown | null> {
-    return this.deps.restaurantRepository.findById(restaurantId, []);
+  async getById(restaurantId: string): Promise<Restaurant | null> {
+    return this.deps.restaurantRepository.findById(restaurantId);
   }
 
   async getByOwnerId(input: GetRestaurantsByOwnerInput): Promise<GetRestaurantsByOwnerResult> {
     const { ownerId, page, limit } = input;
+
     const { restaurants, total } = await this.deps.restaurantRepository.findByOwnerId(
       ownerId,
       page,
       limit,
     );
+
     const totalPages = Math.ceil(total / limit);
+
     return { restaurants, total, totalPages, currentPage: page };
   }
 
-  async create(input: CreateRestaurantInput): Promise<unknown> {
-    const { ownerId, name, address, location, logo, latitude, longitude, deliveryAreaRadius } = input;
-    if (!name?.trim()) throw new Error("Name is required");
-    const locationStr =
-      typeof address === "string" ? address : JSON.stringify(location ?? {});
-    const payload: Record<string, unknown> = {
-      name: name.trim(),
-      location: locationStr,
-      ownerId,
-      status: "active",
-      logo: logo ?? "",
-    };
-    if (latitude !== undefined) payload.latitude = latitude;
-    if (longitude !== undefined) payload.longitude = longitude;
-    if (deliveryAreaRadius !== undefined) payload.deliveryAreaRadius = deliveryAreaRadius;
-    const created = await this.deps.restaurantRepository.create(payload);
-    const createdRest = created as { _id?: unknown; ownerId?: unknown; name?: string };
-    const createdOwnerId = createdRest.ownerId != null && typeof createdRest.ownerId === "object" && "_id" in createdRest.ownerId
-      ? String((createdRest.ownerId as { _id: unknown })._id)
-      : String(createdRest.ownerId ?? "");
+  async create(input: CreateRestaurantInput): Promise<Restaurant> {
+    if (!input.name?.trim()) throw new Error("Name is required");
+
+    const created = await this.deps.restaurantRepository.create(input);
+
     await this.deps.eventPublisher.publish("restaurant.created", {
-      restaurantId: String(createdRest._id ?? ""),
-      ownerId: createdOwnerId,
-      name: createdRest.name ?? "",
+      restaurantId: created._id,
+      ownerId: ownerIdString(created),
+      name: created.name,
+      status: created.status,
     });
+
     return created;
   }
 
-  async update(input: UpdateRestaurantInput): Promise<unknown> {
-    const { restaurantId, ownerId, name, address, location, logo, latitude, longitude, deliveryAreaRadius } = input;
+  async update(input: UpdateRestaurantInput): Promise<Restaurant | null> {
+    const { restaurantId, ownerId, ...updatePayload } = input;
+
     const restaurant = await this.deps.restaurantRepository.findById(restaurantId);
+
     if (!restaurant) throw new Error("Restaurant not found");
-    const r = restaurant as { ownerId?: unknown };
-    const oid = r.ownerId && typeof r.ownerId === "object" && "_id" in r.ownerId
-      ? (r.ownerId as { _id: unknown })._id
-      : r.ownerId;
-    if (String(oid) !== ownerId) throw new Error("Not the owner of this restaurant");
-    const update: Record<string, unknown> = {};
-    if (name !== undefined) update.name = name;
-    if (address !== undefined) update.location = address;
-    if (location !== undefined) {
-      update.location = typeof location === "string" ? location : JSON.stringify(location);
+    if (ownerIdString(restaurant) !== ownerId) {
+      throw new Error("Not the owner of this restaurant");
     }
-    if (logo !== undefined) update.logo = logo;
-    if (latitude !== undefined) update.latitude = latitude;
-    if (longitude !== undefined) update.longitude = longitude;
-    if (deliveryAreaRadius !== undefined) update.deliveryAreaRadius = deliveryAreaRadius;
-    const updated = await this.deps.restaurantRepository.findByIdAndUpdate(restaurantId, update);
-    const updatedRest = updated as { _id?: unknown; ownerId?: unknown; name?: string };
-    const updatedOwnerId = updatedRest.ownerId != null && typeof updatedRest.ownerId === "object" && "_id" in updatedRest.ownerId
-      ? String((updatedRest.ownerId as { _id: unknown })._id)
-      : String(updatedRest.ownerId ?? "");
+
+    const updated = await this.deps.restaurantRepository.findByIdAndUpdate(
+      restaurantId,
+      updatePayload as Record<string, unknown>,
+    );
+
+    if (!updated) throw new Error("Restaurant not found");
+
     await this.deps.eventPublisher.publish("restaurant.updated", {
-      restaurantId: String(updatedRest._id ?? restaurantId),
-      ownerId: updatedOwnerId,
-      name: updatedRest.name ?? (restaurant as { name?: string }).name ?? "",
+      restaurantId: updated._id,
+      ownerId: ownerIdString(updated),
+      name: updated.name,
+      status: updated.status,
     });
+
     return updated;
   }
 
-  async delete(restaurantId: string, ownerId: string): Promise<unknown> {
+  async delete(restaurantId: string, ownerId: string): Promise<Restaurant | null> {
     const restaurant = await this.deps.restaurantRepository.findById(restaurantId);
+
     if (!restaurant) throw new Error("Restaurant not found");
-    const r = restaurant as { ownerId?: unknown };
-    const oid = r.ownerId && typeof r.ownerId === "object" && "_id" in r.ownerId
-      ? (r.ownerId as { _id: unknown })._id
-      : r.ownerId;
-    if (String(oid) !== ownerId) throw new Error("Not the owner of this restaurant");
+    if (ownerIdString(restaurant) !== ownerId) {
+      throw new Error("Not the owner of this restaurant");
+    }
+
     return this.deps.restaurantRepository.findByIdAndDelete(restaurantId);
   }
 
   async getActive(input: GetActiveRestaurantsInput): Promise<GetActiveRestaurantsResult> {
     const { page, limit, search } = input;
+
     const { restaurants, total } = await this.deps.restaurantRepository.findActiveWithSearch(
       search?.trim() || undefined,
       page,
       limit,
     );
+
     const totalPages = Math.ceil(total / limit);
+
     return { restaurants, total, totalPages, currentPage: page };
   }
 
@@ -120,6 +115,7 @@ export class RestaurantUseCase {
       1,
       limit,
     );
+
     return { restaurants };
   }
 }

@@ -8,6 +8,7 @@
     "dev": "tsx watch src/server.ts"
   },
   "dependencies": {
+    "@bitez/logger": "file:../../packages/logger",
     "amqplib": "^0.10.4",
     "express": "^5.1.0",
     "mongoose": "^8.13.1",

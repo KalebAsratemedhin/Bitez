@@ -1,9 +1,12 @@
 import type {
   IDeliveryRepository,
   IDeliveryPersonRepository,
+  IUnassignedOrderRepository,
+  IOrderReadModelRepository,
   INotificationService,
   IEventPublisher,
 } from "../../domain/interfaces/index.js";
+
 import type {
   UpdateDeliveryStatusInput,
   GetDeliveriesResult,
@@ -24,9 +27,9 @@ export interface DeliveryUseCaseDeps {
   deliveryPersonRepository: IDeliveryPersonRepository;
   notificationService: INotificationService;
   eventPublisher: IEventPublisher;
-  /** Optional: for enriching deliveries with order (restaurant, customer) details. */
+  unassignedOrderRepository: IUnassignedOrderRepository;
+  orderReadModelRepository?: IOrderReadModelRepository;
   getOrderByIdEnriched?: GetOrderByIdEnriched;
-  /** Optional: for including delivery person name/phone in "my deliveries" response. */
   getUserById?: GetUserById;
 }
 
@@ -85,6 +88,45 @@ export class DeliveryUseCase {
     return { delivery };
   }
 
+  async enqueueOrderForDelivery(input: {
+    orderId: string;
+    customerId?: string;
+    restaurantId?: string;
+    estimatedDeliveryTime: Date;
+    deliveryAddress?: string;
+    coordinates?: { lat?: number; lng?: number };
+  }): Promise<void> {
+
+    await this.deps.unassignedOrderRepository.add({
+      orderId: input.orderId,
+      customerId: input.customerId,
+      restaurantId: input.restaurantId,
+      estimatedDeliveryTime: input.estimatedDeliveryTime,
+      deliveryAddress: input.deliveryAddress,
+      coordinates: input.coordinates,
+    });
+  }
+
+  async tryAssignNextQueuedOrder(): Promise<boolean> {
+    const next = await this.deps.unassignedOrderRepository.getOldest();
+    if (!next) return false;
+
+    try {
+      await this.assignDelivery({
+        orderId: next.orderId,
+        estimatedDeliveryTime: next.estimatedDeliveryTime,
+        customerId: next.customerId,
+      });
+
+      await this.deps.unassignedOrderRepository.removeByOrderId(next.orderId);
+      return true;
+
+    } catch {
+      return false;
+    }
+  }
+
+
   async updateDeliveryStatus(input: UpdateDeliveryStatusInput): Promise<unknown> {
     const { deliveryId, status, userId } = input;
 
@@ -134,6 +176,20 @@ export class DeliveryUseCase {
       const dpId = d.deliveryPersonId?._id ?? d.deliveryPersonId;
       if (dpId) {
         await this.deps.deliveryPersonRepository.setPersonFreeIfNoPending(String(dpId));
+        await this.tryAssignNextQueuedOrder();
+      }
+    }
+
+    if (status === "delivered" && d.customerId) {
+      const deliveryPersonId = String(d.deliveryPersonId?._id ?? d.deliveryPersonId ?? "");
+      const customerId = String(d.customerId);
+      if (deliveryPersonId && customerId) {
+        await this.deps.eventPublisher.publish("delivery.delivered", {
+          deliveryId,
+          orderId: orderIdStr,
+          deliveryPersonId,
+          customerId,
+        });
       }
     }
 
@@ -210,7 +266,17 @@ export class DeliveryUseCase {
       }
     }
 
-    if (!this.deps.getOrderByIdEnriched || deliveries.length === 0) {
+    const getOrderForDelivery = async (orderIdStr: string): Promise<unknown | null> => {
+      if (this.deps.orderReadModelRepository) {
+        const fromReadModel = await this.deps.orderReadModelRepository.findByOrderId(orderIdStr);
+        if (fromReadModel) return fromReadModel;
+      }
+      if (this.deps.getOrderByIdEnriched) {
+        return this.deps.getOrderByIdEnriched(orderIdStr);
+      }
+      return null;
+    };
+    if (deliveries.length === 0) {
       return { deliveries, total, deliveryPerson };
     }
     const enriched = await Promise.all(
@@ -221,7 +287,7 @@ export class DeliveryUseCase {
           orderIdVal != null && typeof orderIdVal === "object" && "_id" in orderIdVal
             ? String((orderIdVal as { _id: unknown })._id)
             : String(orderIdVal ?? "");
-        const order = orderIdStr ? await this.deps.getOrderByIdEnriched!(orderIdStr) : null;
+        const order = orderIdStr ? await getOrderForDelivery(orderIdStr) : null;
         return { ...doc, orderId: order ?? orderIdVal };
       }),
     );

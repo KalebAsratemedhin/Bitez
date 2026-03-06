@@ -14,8 +14,7 @@ export interface GetRestaurantsByOwnerResult {
 export interface CreateRestaurantInput {
   ownerId: string;
   name: string;
-  address?: string;
-  location?: unknown;
+  location?: string;
   logo?: string;
   latitude?: number;
   longitude?: number;
@@ -26,7 +25,6 @@ export interface UpdateRestaurantInput {
   restaurantId: string;
   ownerId: string;
   name?: string;
-  address?: string;
   location?: unknown;
   logo?: string;
   latitude?: number;

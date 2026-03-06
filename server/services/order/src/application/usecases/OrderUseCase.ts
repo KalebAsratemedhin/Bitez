@@ -2,8 +2,8 @@ import { OrderStatus, orderCanBeCancelled } from "../../domain/entities/Order.js
 import type {
   IOrderRepository,
   IRestaurantRepository,
+  IRestaurantReadModelRepository,
   INotificationService,
-  IDeliveryAssignmentService,
   IUserRepository,
   IPaymentGateway,
   ITokenService,
@@ -27,182 +27,239 @@ export type GetCustomerById = (
 export interface OrderUseCaseDeps {
   orderRepository: IOrderRepository;
   restaurantRepository: IRestaurantRepository;
+  restaurantReadModelRepository?: IRestaurantReadModelRepository;
   notificationService: INotificationService;
-  deliveryAssignmentService: IDeliveryAssignmentService;
   userRepository: IUserRepository;
   paymentGateway: IPaymentGateway;
   tokenService: ITokenService;
   eventPublisher: IEventPublisher;
-  /** Optional: for internal order enrichment (e.g. delivery service). */
   getCustomerById?: GetCustomerById;
 }
+
+function toRefId(value: unknown): string {
+  return value != null ? String(value) : "";
+}
+
+type OrderRecord = Record<string, unknown>;
+
+type OrderContext = {
+  customerId: string;
+  restaurantId: string;
+  totalAmount: number;
+  createdAt: Date;
+  order: OrderRecord;
+};
 
 export class OrderUseCase {
   constructor(private readonly deps: OrderUseCaseDeps) {}
 
   async createOrder(input: CreateOrderInput): Promise<unknown> {
-    const { customerID, restaurantID, orderDetails, totalAmount, deliveryAddress, coordinates } =
-      input;
+    const { restaurantID, deliveryAddress } = this.validateCreateOrderInput(input);
+
+    const restaurant = await this.validateRestaurantActive(restaurantID);
+
+    const createdOrder = await this.persistOrder(input, restaurantID, deliveryAddress);
+
+    await this.publishOrderCreated(createdOrder as OrderRecord);
+
+    return createdOrder;
+  }
+
+  private validateCreateOrderInput(input: CreateOrderInput): {
+    restaurantID: string;
+    deliveryAddress: string;
+  } {
+    const { restaurantID, deliveryAddress } = input;
 
     if (!restaurantID) throw new Error("No restaurant provided.");
+
     const address = typeof deliveryAddress === "string" ? deliveryAddress.trim() : "";
     if (!address) throw new Error("Delivery address is required.");
 
+    return { ...input, deliveryAddress: address };
+  }
+
+  private async validateRestaurantActive(restaurantID: string): Promise<unknown> {
+    if (this.deps.restaurantReadModelRepository) {
+      const cached = await this.deps.restaurantReadModelRepository.findById(restaurantID);
+      if (cached) {
+        if (cached.status !== "active") {
+          throw new Error("Restaurant is not active.");
+        }
+        return cached;
+      }
+    }
     const restaurant = await this.deps.restaurantRepository.findById(restaurantID);
     if (!restaurant) throw new Error("No restaurant provided.");
     if ((restaurant as { status?: string }).status !== "active") {
       throw new Error("Restaurant is not active.");
     }
+    return restaurant;
+  }
 
-    const created = await this.deps.orderRepository.create({
-      customerID,
+  private async persistOrder(
+    input: CreateOrderInput,
+    restaurantID: string,
+    deliveryAddress: string,
+  ): Promise<unknown> {
+    return this.deps.orderRepository.create({
+      ...input,
       restaurantID,
-      orderDetails,
-      totalAmount,
-      deliveryAddress: address,
-      coordinates,
+      deliveryAddress,
       status: OrderStatus.PENDING,
       paymentCompleted: true,
     });
-    const ord = created as {
-      _id?: unknown;
-      customerID?: unknown;
-      restaurantID?: unknown;
-      totalAmount?: number;
-      status?: string;
-      createdAt?: Date;
-    };
-    const cid = ord.customerID != null && typeof ord.customerID === "object" && "_id" in ord.customerID
-      ? String((ord.customerID as { _id: unknown })._id)
-      : String(ord.customerID ?? "");
-    const rid = ord.restaurantID != null && typeof ord.restaurantID === "object" && "_id" in ord.restaurantID
-      ? String((ord.restaurantID as { _id: unknown })._id)
-      : String(ord.restaurantID ?? "");
+  }
+
+  private async publishOrderCreated(createdOrder: OrderRecord): Promise<void> {
+    const coords = createdOrder.coordinates as { lat?: number; lng?: number } | undefined;
     await this.deps.eventPublisher.publish("order.created", {
-      orderId: String(ord._id ?? ""),
-      customerId: cid,
-      restaurantId: rid,
-      totalAmount: ord.totalAmount ?? 0,
-      status: ord.status ?? OrderStatus.PENDING,
-      createdAt: ord.createdAt ?? new Date(),
+      orderId: toRefId(createdOrder._id),
+      customerId: toRefId(createdOrder.customerID),
+      restaurantId: toRefId(createdOrder.restaurantID),
+      totalAmount: (createdOrder.totalAmount as number) ?? 0,
+      status: (createdOrder.status as string) ?? OrderStatus.PENDING,
+      createdAt: (createdOrder.createdAt as Date) ?? new Date(),
+      deliveryAddress: typeof createdOrder.deliveryAddress === "string" ? createdOrder.deliveryAddress : undefined,
+      coordinates: coords != null ? coords : undefined,
     });
-    return created;
   }
 
   async updateOrderStatus(input: UpdateOrderStatusInput): Promise<unknown> {
     const { orderId, status, userId } = input;
 
-    const oldOrder = await this.deps.orderRepository.findById(orderId);
-    if (!oldOrder) throw new Error("Order not found");
+    const context = await this.getOrderContextAndValidateOwnership(orderId, userId);
 
-    const o = oldOrder as Record<string, unknown>;
-    const restaurantId =
-      o.restaurantID != null && typeof o.restaurantID === "object" && "_id" in o.restaurantID
-        ? String((o.restaurantID as { _id: unknown })._id)
-        : String(o.restaurantID ?? "");
+    if (status === "preparing") {
+      return this.handlePreparingStatus(orderId, context);
+    }
+
+    if (status === "ready") {
+      return this.handleReadyStatus(orderId, context);
+    }
+
+    throw new Error("Invalid status");
+  }
+
+  private async getOrderContextAndValidateOwnership(
+    orderId: string,
+    userId: string,
+  ): Promise<OrderContext> {
+    const order = await this.deps.orderRepository.findById(orderId);
+
+    if (!order) throw new Error("Order not found");
+
+    const orderRecord = order as OrderRecord;
+    const restaurantId = toRefId(orderRecord.restaurantID);
+
     const restaurant = await this.deps.restaurantRepository.findById(restaurantId);
+
     if (!restaurant) throw new Error("Order not found");
 
-    const r = restaurant as { ownerId?: { _id?: unknown } | unknown };
-    const ro = r.ownerId;
-    const ownerId =
-      ro != null && typeof ro === "object" && "_id" in ro
-        ? String((ro as { _id: unknown })._id)
-        : String(ro ?? "");
+    const ownerId = toRefId((restaurant as { ownerId?: unknown }).ownerId);
 
     if (!ownerId || ownerId !== userId) {
       throw new Error("You are not authorized to update this order.");
     }
-    if ((o.status as string) === OrderStatus.CANCELLED) {
+    if ((orderRecord.status as string) === OrderStatus.CANCELLED) {
       throw new Error("Order is cancelled by the customer.");
     }
 
-    const cid = (o.customerID != null && typeof o.customerID === "object" && "_id" in o.customerID)
-      ? String((o.customerID as { _id: unknown })._id)
-      : String(o.customerID ?? "");
-    const rid = (o.restaurantID != null && typeof o.restaurantID === "object" && "_id" in o.restaurantID)
-      ? String((o.restaurantID as { _id: unknown })._id)
-      : String(o.restaurantID ?? "");
-    const totalAmount = (o.totalAmount as number) ?? 0;
-    const createdAt = (o.createdAt as Date) ?? new Date();
-
-    const publishOrderUpdated = async (newStatus: string) => {
-      await this.deps.eventPublisher.publish("order.updated", {
-        orderId,
-        customerId: cid,
-        restaurantId: rid,
-        totalAmount,
-        status: newStatus,
-        createdAt,
-      });
+    return {
+      customerId: toRefId(orderRecord.customerID),
+      restaurantId,
+      totalAmount: (orderRecord.totalAmount as number) ?? 0,
+      createdAt: (orderRecord.createdAt as Date) ?? new Date(),
+      order: orderRecord,
     };
+  }
 
-    if (status === "preparing") {
-      await this.deps.orderRepository.updateStatus(orderId, OrderStatus.PREPARING);
-      await publishOrderUpdated(OrderStatus.PREPARING);
-      await this.deps.notificationService.sendToUser(cid, "Your order is being prepared");
-      return this.deps.orderRepository.findById(orderId);
-    }
+  private async publishOrderUpdated(
+    orderId: string,
+    context: { customerId: string; restaurantId: string; totalAmount: number; createdAt: Date },
+    status: string,
+  ): Promise<void> {
+    await this.deps.eventPublisher.publish("order.updated", {
+      orderId,
+      customerId: context.customerId,
+      restaurantId: context.restaurantId,
+      totalAmount: context.totalAmount,
+      status,
+      createdAt: context.createdAt,
+    });
+  }
 
-    if (status === "ready") {
-      await this.deps.orderRepository.updateStatus(orderId, OrderStatus.READY);
-      await publishOrderUpdated(OrderStatus.READY);
+  private async handlePreparingStatus(
+    orderId: string,
+    context: { customerId: string; restaurantId: string; totalAmount: number; createdAt: Date },
+  ): Promise<unknown> {
+    await this.deps.orderRepository.updateStatus(orderId, OrderStatus.PREPARING);
+    await this.publishOrderUpdated(orderId, context, OrderStatus.PREPARING);
+    await this.deps.notificationService.sendToUser(
+      context.customerId,
+      "Your order is being prepared",
+    );
 
-      const estimatedDeliveryTime = new Date(Date.now() + 30 * 60 * 1000);
-      await this.deps.deliveryAssignmentService.assignDelivery(
-        orderId,
-        estimatedDeliveryTime,
-        cid,
-      );
+    return this.deps.orderRepository.findById(orderId);
+  }
 
-      await this.deps.notificationService.sendToUser(
-        cid,
-        "Your order is ready for delivery and has been assigned to delivery",
-      );
-      return this.deps.orderRepository.findById(orderId);
-    }
+  private async handleReadyStatus(orderId: string, context: OrderContext): Promise<unknown> {
+    const order = context.order;
 
-    throw new Error("Invalid status");
+    await this.deps.orderRepository.updateStatus(orderId, OrderStatus.READY);
+    await this.publishOrderUpdated(orderId, context, OrderStatus.READY);
+
+    const estimatedDeliveryTime = new Date(Date.now() + 30 * 60 * 1000);
+
+    await this.deps.eventPublisher.publish("order.ready_for_delivery", {
+      orderId,
+      customerId: context.customerId,
+      restaurantId: context.restaurantId,
+      estimatedDeliveryTime: estimatedDeliveryTime.toISOString(),
+      deliveryAddress: typeof order.deliveryAddress === "string" ? order.deliveryAddress : undefined,
+      coordinates:
+        order.coordinates != null
+          ? (order.coordinates as { lat?: number; lng?: number })
+          : undefined,
+    });
+
+    await this.deps.notificationService.sendToUser(
+      context.customerId,
+      "Your order is ready for delivery. We are finding a delivery person for you",
+    );
+
+    return this.deps.orderRepository.findById(orderId);
   }
 
   async cancelOrder(input: CancelOrderInput): Promise<unknown> {
     const { orderId, userId } = input;
 
     const order = await this.deps.orderRepository.findById(orderId);
+
     if (!order) throw new Error("Order not found.");
 
-    const o = order as {
-      customerID?: { _id?: unknown } | unknown;
-      restaurantID?: unknown;
-      totalAmount?: number;
-      createdAt?: Date;
-      status?: string;
-    };
-    const customerId =
-      (o.customerID && typeof o.customerID === "object" && "_id" in o.customerID
-        ? (o.customerID as { _id?: unknown })._id
-        : o.customerID) ?? o.customerID;
+    const orderRecord = order as OrderRecord;
+    const customerId = toRefId(orderRecord.customerID);
 
-    if (String(customerId) !== userId) {
+    if (customerId !== userId) {
       throw new Error("You are not authorized to update this order.");
     }
-    if (o.status === "cancelled") throw new Error("Order already cancelled.");
-    if (!orderCanBeCancelled(o.status ?? "")) {
+    if ((orderRecord.status as string) === OrderStatus.CANCELLED) {
+      throw new Error("Order already cancelled.");
+    }
+    if (!orderCanBeCancelled((orderRecord.status as string) ?? "")) {
       throw new Error("Order is past pending state and cannot be cancelled.");
     }
 
-    await this.deps.orderRepository.updateStatus(orderId, "cancelled");
-    const rid = (o.restaurantID != null && typeof o.restaurantID === "object" && "_id" in o.restaurantID)
-      ? String((o.restaurantID as { _id: unknown })._id)
-      : String(o.restaurantID ?? "");
-    await this.deps.eventPublisher.publish("order.updated", {
-      orderId,
-      customerId: String(customerId),
-      restaurantId: rid,
-      totalAmount: o.totalAmount ?? 0,
-      status: "cancelled",
-      createdAt: o.createdAt ?? new Date(),
-    });
+    await this.deps.orderRepository.updateStatus(orderId, OrderStatus.CANCELLED);
+
+    await this.publishOrderUpdated(orderId, {
+      customerId,
+      restaurantId: toRefId(orderRecord.restaurantID),
+      totalAmount: (orderRecord.totalAmount as number) ?? 0,
+      createdAt: (orderRecord.createdAt as Date) ?? new Date(),
+    }, OrderStatus.CANCELLED);
+
     return this.deps.orderRepository.findById(orderId);
   }
 
@@ -230,60 +287,71 @@ export class OrderUseCase {
     return this.deps.orderRepository.findById(orderId);
   }
 
-  /** Internal: return order with restaurant and customer populated for delivery/other services. */
   async getOrderByIdEnriched(orderId: string): Promise<unknown | null> {
     const order = await this.deps.orderRepository.findById(orderId);
+
     if (!order) return null;
-    const o = order as Record<string, unknown>;
-    const restaurantId =
-      o.restaurantID != null && typeof o.restaurantID === "object" && "_id" in o.restaurantID
-        ? String((o.restaurantID as { _id: unknown })._id)
-        : String(o.restaurantID ?? "");
-    const customerId =
-      o.customerID != null && typeof o.customerID === "object" && "_id" in o.customerID
-        ? String((o.customerID as { _id: unknown })._id)
-        : String(o.customerID ?? "");
-    const restaurant = restaurantId
-      ? await this.deps.restaurantRepository.findById(restaurantId)
-      : null;
-    const r = restaurant as { _id?: unknown; name?: string } | null;
-    const restaurantID =
-      r != null
-        ? { _id: String(r._id ?? restaurantId), name: String(r?.name ?? "") }
-        : { _id: restaurantId, name: "" };
-    let customerID: { _id: string; name: string; phoneNumber?: string } = {
-      _id: customerId,
-      name: "",
-    };
-    if (this.deps.getCustomerById && customerId) {
-      const customer = await this.deps.getCustomerById(customerId);
-      if (customer) customerID = customer;
-    }
-    return { ...o, restaurantID, customerID };
+
+    const orderRecord = order as OrderRecord;
+    const restaurantId = toRefId(orderRecord.restaurantID);
+    const customerId = toRefId(orderRecord.customerID);
+
+    const restaurantSummary = await this.getRestaurantSummary(restaurantId);
+    const customerSummary = await this.getCustomerSummary(customerId);
+
+    return { ...orderRecord, restaurantID: restaurantSummary, customerID: customerSummary };
+  }
+
+  private async getRestaurantSummary(
+    restaurantId: string,
+  ): Promise<{ _id: string; name: string }> {
+    if (!restaurantId) return { _id: restaurantId, name: "" };
+
+    const restaurant = await this.deps.restaurantRepository.findById(restaurantId);
+    const record = restaurant as { _id?: unknown; name?: string } | null;
+
+    return record != null
+      ? { _id: String(record._id ?? restaurantId), name: String(record.name ?? "") }
+      : { _id: restaurantId, name: "" };
+  }
+
+  private async getCustomerSummary(
+    customerId: string,
+  ): Promise<{ _id: string; name: string; phoneNumber?: string }> {
+    const fallback = { _id: customerId, name: "" };
+
+    if (!customerId || !this.deps.getCustomerById) return fallback;
+
+    const customer = await this.deps.getCustomerById(customerId);
+
+    return customer ?? fallback;
   }
 
   async initializePayment(input: InitializePaymentInput): Promise<InitializePaymentResult> {
     const { orderId, total, userId, serverUrl, authHeader } = input;
 
     const order = await this.deps.orderRepository.findById(orderId);
+
     if (!order) throw new Error("Order not found");
 
     const user = await this.deps.userRepository.findById(userId, { authHeader });
+
     if (!user) throw new Error("User not found");
 
-    const u = user as { email: string; name: string; phoneNumber?: string };
-    const o = order as { _id: unknown };
-    const token = await this.deps.tokenService.sign({ orderId: o._id }, "30m");
+    const userRecord = user as { email: string; name: string; phoneNumber?: string };
+    const orderRecord = order as { _id: unknown };
+    const token = await this.deps.tokenService.sign({ orderId: orderRecord._id }, "30m");
     const returnUrl = `${serverUrl}/order/payment-success?token=${token}`;
 
     const result = await this.deps.paymentGateway.initializePayment({
       amount: total,
-      email: u.email,
-      firstName: u.name,
-      phoneNumber: u.phoneNumber ?? "",
-      txRef: `order_${o._id}`,
+      email: userRecord.email,
+      firstName: userRecord.name,
+      phoneNumber: userRecord.phoneNumber ?? "",
+      txRef: `order_${orderRecord._id}`,
       returnUrl,
     });
+
     if (!result.success) {
       throw new Error(result.message ?? "Payment initialization failed");
     }
@@ -292,15 +360,15 @@ export class OrderUseCase {
   }
 
   async paymentSuccessCallback(input: PaymentSuccessInput): Promise<PaymentSuccessResult> {
-    const decoded = (await this.deps.tokenService.verify(input.token)) as {
-      orderId?: string;
-    };
+    const decoded = (await this.deps.tokenService.verify(input.token)) as { orderId?: string };
     const orderId = decoded.orderId;
+
     if (!orderId) throw new Error("Invalid token");
 
     if (this.deps.orderRepository.updatePaymentCompleted) {
       await this.deps.orderRepository.updatePaymentCompleted(orderId, true);
     }
+
     return { orderId };
   }
 }
