@@ -9,7 +9,8 @@
     "paths": {
       "@domain/*": ["src/domain/*"],
       "@application/*": ["src/application/*"],
-      "@infrastructure/*": ["src/infrastructure/*"]
+      "@infrastructure/*": ["src/infrastructure/*"],
+      "@bitez/logger": ["../packages/logger/dist/index.d.ts"]
     },
     "strict": true,
     "skipLibCheck": true,

@@ -22,7 +22,7 @@ services:
 
   gateway:
     build:
-      context: ./server/gateway
+      context: ./gateway
       dockerfile: Dockerfile
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
@@ -44,7 +44,7 @@ services:
 
   auth:
     build:
-      context: ./server/services/auth
+      context: ./services/auth
       dockerfile: Dockerfile
     environment:
       PORT: 3001
@@ -60,7 +60,7 @@ services:
 
   restaurant:
     build:
-      context: ./server/services/restaurant
+      context: ./services/restaurant
       dockerfile: Dockerfile
     environment:
       PORT: 3002
@@ -79,7 +79,7 @@ services:
 
   order:
     build:
-      context: ./server/services/order
+      context: ./services/order
       dockerfile: Dockerfile
     environment:
       PORT: 3003
@@ -102,7 +102,7 @@ services:
 
   delivery:
     build:
-      context: ./server/services/delivery
+      context: ./services/delivery
       dockerfile: Dockerfile
     environment:
       PORT: 3004
@@ -119,7 +119,7 @@ services:
 
   notification:
     build:
-      context: ./server/services/notification
+      context: ./services/notification
       dockerfile: Dockerfile
     environment:
       PORT: 3005
@@ -133,7 +133,7 @@ services:
 
   dashboard:
     build:
-      context: ./server/services/dashboard
+      context: ./services/dashboard
       dockerfile: Dockerfile
     environment:
       PORT: 3006
