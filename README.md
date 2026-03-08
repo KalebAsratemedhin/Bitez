@@ -116,5 +116,3 @@ Bitez/
 - **Restaurant owner** — Register restaurant, manage menus, view and update order status (e.g. preparing → ready).
 - **Delivery person** — View assigned deliveries, update delivery status; auto-created when a user registers as delivery.
 - **Admin** — User/restaurant management, dashboards.
-
-Auth is JWT; gateway forwards `Authorization` to the services that need it.
