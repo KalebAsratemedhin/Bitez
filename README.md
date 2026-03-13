@@ -2,7 +2,6 @@
 
 Bitez is a dining and delivery platform that connects restaurants, customers, and delivery personnel in one place. Customers discover and order from local restaurants, track orders and deliveries in real time, and rate their experience. Restaurant owners manage menus and order flow from preparation to handoff. Delivery personnel receive assignments, update status, and get rated by customers. Admins oversee users and restaurants and use dashboards for insights. The system is built as a microservices backend behind an API gateway, with a Next.js front end for the full flow from browsing to delivery.
 
----
 
 ## Tech Stack
 
