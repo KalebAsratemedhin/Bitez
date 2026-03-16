@@ -14,10 +14,10 @@ export const ratingApi = api.injectEndpoints({
       invalidatesTags: (_result, _err, { entityType, entityId }) => {
         const tags: Array<
           | { type: "Rating"; id: string }
-          | { type: "top-restaurants"; id?: void }
           | { type: "a-restaurant"; id: string }
           | "customer-deliveries"
           | "top-menu-items"
+          | "top-restaurants"
         > = [{ type: "Rating", id: `${entityType}:${entityId}` }];
         if (String(entityType).toLowerCase() === "restaurant") {
           tags.push("top-restaurants");

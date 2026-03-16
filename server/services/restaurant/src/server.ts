@@ -3,7 +3,7 @@ import express from "express";
 import morgan from "morgan";
 import path from "path";
 
-import { createLogger } from "@bitez/logger";
+import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
 import { RestaurantUseCase } from "./application/usecases/RestaurantUseCase.js";
 import { MenuUseCase } from "./application/usecases/MenuUseCase.js";

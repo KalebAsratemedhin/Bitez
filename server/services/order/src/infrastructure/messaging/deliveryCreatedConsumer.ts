@@ -1,5 +1,5 @@
 import amqp from "amqplib";
-import type { Logger } from "@bitez/logger";
+import type { Logger } from "../../logger.js";
 import type { IOrderRepository } from "../../domain/interfaces/OrderRepository.js";
 import type { INotificationService } from "../../domain/interfaces/NotificationService.js";
 

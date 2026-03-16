@@ -116,11 +116,16 @@ export class RestaurantController {
         } catch {
         }
       }
+      const location =
+        typeof body.location === "string"
+          ? body.location
+          : typeof body.address === "string"
+            ? body.address
+            : undefined;
       await this.restaurantUseCase.create({
         ownerId: userId,
         name: body.name ?? "",
-        address: body.address,
-        location: body.location,
+        location,
         logo,
         latitude: body.latitude != null ? Number(body.latitude) : undefined,
         longitude: body.longitude != null ? Number(body.longitude) : undefined,
@@ -158,12 +163,17 @@ export class RestaurantController {
         } catch {
         }
       }
+      const location =
+        typeof body.location === "string"
+          ? body.location
+          : typeof body.address === "string"
+            ? body.address
+            : undefined;
       await this.restaurantUseCase.update({
         restaurantId: id,
         ownerId: getUserId(req),
         name: body.name,
-        address: body.address,
-        location: body.location,
+        location,
         logo,
         latitude:
           body.latitude != null && body.latitude !== ""

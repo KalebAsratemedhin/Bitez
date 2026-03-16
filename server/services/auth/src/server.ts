@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import morgan from "morgan";
-import { createLogger } from "@bitez/logger";
+import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
 import { AuthUseCase } from "./application/usecases/AuthUseCase.js";
 import { AuthController } from "./infrastructure/controllers/AuthController.js";

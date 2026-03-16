@@ -1,5 +1,5 @@
 import amqp from "amqplib";
-import type { Logger } from "@bitez/logger";
+import type { Logger } from "../../logger.js";
 import type { NotificationUseCase } from "../../application/usecases/NotificationUseCase.js";
 
 const EXCHANGE = "bitez";

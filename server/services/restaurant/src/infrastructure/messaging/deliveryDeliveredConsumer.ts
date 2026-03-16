@@ -1,5 +1,5 @@
 import amqp from "amqplib";
-import type { Logger } from "@bitez/logger";
+import type { Logger } from "../../logger.js";
 import type { IDeliveredToRepository } from "@domain/interfaces/DeliveredToRepository.ts";
 
 const EXCHANGE = "bitez";

@@ -150,7 +150,7 @@ const RestaurantOrdersPage = () => {
 
   const handleStatusUpdate = async (
     orderId: string,
-    currentStatus: "pending" | "preparing" | "ready" | "cancelled"
+    currentStatus: "pending" | "unpaid" | "preparing" | "ready" | "cancelled"
   ) => {
     const nextStatus = getNextStatus(currentStatus);
     if (!nextStatus) return;

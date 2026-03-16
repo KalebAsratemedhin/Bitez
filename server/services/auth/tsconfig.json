@@ -6,9 +6,7 @@
       "outDir": "dist",
       "rootDir": "src",
       "baseUrl": ".",
-      "paths": {
-        "@bitez/logger": ["../../packages/logger/dist/index.d.ts"]
-      },
+      "paths": {},
       "strict": true,
       "skipLibCheck": true,
       "esModuleInterop": true,

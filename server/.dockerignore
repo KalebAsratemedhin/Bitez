@@ -1,0 +1,5 @@
+# Reduce build context size
+**/node_modules
+**/.git
+**/*.log
+**/dist

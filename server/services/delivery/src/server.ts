@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import morgan from "morgan";
-import { createLogger } from "@bitez/logger";
+import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
 import { DeliveryRepository } from "./infrastructure/repositories/DeliveryRepository.js";
 import { DeliveryPersonRepository } from "./infrastructure/repositories/DeliveryPersonRepository.js";

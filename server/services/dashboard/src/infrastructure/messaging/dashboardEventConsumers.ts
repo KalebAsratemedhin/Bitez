@@ -1,5 +1,5 @@
 import amqp from "amqplib";
-import type { Logger } from "@bitez/logger";
+import type { Logger } from "../../logger.js";
 import {
   upsertOrderReadModel,
   upsertRestaurantReadModel,
