@@ -1,10 +1,11 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import type { MenuUseCase } from "../../application/usecases/MenuUseCase.js";
 import type { CloudinaryService } from "../services/CloudinaryService.js";
 import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
+import { AppError } from "../http/errors.js";
 
 function getUserId(req: AuthenticatedRequest): string {
-  return req.user!.id;
+  return typeof req.user?.id === "string" ? req.user.id : "";
 }
 
 function toMenuItemResponse(it: unknown): Record<string, unknown> {
@@ -36,8 +37,13 @@ export class MenuController {
     private readonly cloudinary?: CloudinaryService,
   ) {}
 
-  createMenu = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  createMenu = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
+      const userId = getUserId(req);
+      if (!userId) {
+        next(new AppError({ code: "UNAUTHORIZED", status: 401, message: "Authentication required", expose: true }));
+        return;
+      }
       const restaurantId =
         typeof req.params.restaurantId === "string"
           ? req.params.restaurantId
@@ -45,18 +51,18 @@ export class MenuController {
       const body = req.body as { menuName?: string; menuItems?: string };
       const menuName = body.menuName?.trim();
       if (!menuName) {
-        res.status(400).json({ message: "Menu name is required" });
+        next(new AppError({ code: "BAD_REQUEST", status: 400, message: "Menu name is required", expose: true }));
         return;
       }
       let items: { name: string; description: string; price: number }[];
       try {
         items = JSON.parse(body.menuItems || "[]");
       } catch {
-        res.status(400).json({ message: "Invalid menuItems JSON" });
+        next(new AppError({ code: "BAD_REQUEST", status: 400, message: "Invalid menuItems JSON", expose: true }));
         return;
       }
       if (!Array.isArray(items) || items.length === 0) {
-        res.status(400).json({ message: "At least one menu item is required" });
+        next(new AppError({ code: "BAD_REQUEST", status: 400, message: "At least one menu item is required", expose: true }));
         return;
       }
       const files = (req as Request & { files?: { buffer?: Buffer; mimetype?: string }[] }).files ?? [];
@@ -79,7 +85,7 @@ export class MenuController {
       }
       const menu = await this.menuUseCase.create({
         restaurantId,
-        userId: getUserId(req),
+        userId,
         menuName,
         menuItems: items.map((item) => ({
           name: item.name ?? "",
@@ -100,12 +106,15 @@ export class MenuController {
       });
     } catch (e) {
       const err = e as Error;
-      if (err.message?.includes("Not the owner")) res.status(403).json({ message: err.message });
-      else res.status(500).json({ message: err.message });
+      if (err.message?.includes("Not the owner")) {
+        next(new AppError({ code: "FORBIDDEN", status: 403, message: err.message, expose: true, cause: e }));
+        return;
+      }
+      next(e);
     }
   };
 
-  getMenuByRestaurant = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  getMenuByRestaurant = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const restaurantId =
         typeof req.params.restaurantId === "string"
@@ -115,25 +124,25 @@ export class MenuController {
       const out = (menus as unknown[]).map(toMenuResponse);
       res.json({ menus: out });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      next(e);
     }
   };
 
-  getMenuById = async (req: Request, res: Response): Promise<void> => {
+  getMenuById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const menuId = String(req.params.id ?? "").split(",")[0];
       const menu = await this.menuUseCase.getById({ menuId });
       if (!menu) {
-        res.status(404).json({ message: "Menu not found" });
+        next(new AppError({ code: "NOT_FOUND", status: 404, message: "Menu not found", expose: true }));
         return;
       }
       res.json(toMenuResponse(menu));
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      next(e);
     }
   };
 
-  updateMenu = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  updateMenu = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const menuId =
         typeof req.params.menuId === "string"
@@ -197,7 +206,7 @@ export class MenuController {
             };
           });
         } catch {
-          res.status(400).json({ message: "Invalid menuItems JSON" });
+          next(new AppError({ code: "BAD_REQUEST", status: 400, message: "Invalid menuItems JSON", expose: true }));
           return;
         }
       }
@@ -211,13 +220,19 @@ export class MenuController {
       res.json({ message: "Menu updated successfully" });
     } catch (e) {
       const err = e as Error;
-      if (err.message?.includes("Not the owner")) res.status(403).json({ message: err.message });
-      else if (err.message?.includes("not found")) res.status(404).json({ message: err.message });
-      else res.status(500).json({ message: err.message });
+      if (err.message?.includes("Not the owner")) {
+        next(new AppError({ code: "FORBIDDEN", status: 403, message: err.message, expose: true, cause: e }));
+        return;
+      }
+      if (err.message?.includes("not found")) {
+        next(new AppError({ code: "NOT_FOUND", status: 404, message: err.message, expose: true, cause: e }));
+        return;
+      }
+      next(e);
     }
   };
 
-  deleteMenu = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  deleteMenu = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const menuId =
         typeof req.params.menuId === "string"
@@ -227,9 +242,15 @@ export class MenuController {
       res.json({ message: "Menu deleted successfully" });
     } catch (e) {
       const err = e as Error;
-      if (err.message?.includes("Not the owner")) res.status(403).json({ message: err.message });
-      else if (err.message?.includes("not found")) res.status(404).json({ message: err.message });
-      else res.status(500).json({ message: err.message });
+      if (err.message?.includes("Not the owner")) {
+        next(new AppError({ code: "FORBIDDEN", status: 403, message: err.message, expose: true, cause: e }));
+        return;
+      }
+      if (err.message?.includes("not found")) {
+        next(new AppError({ code: "NOT_FOUND", status: 404, message: err.message, expose: true, cause: e }));
+        return;
+      }
+      next(e);
     }
   };
 }

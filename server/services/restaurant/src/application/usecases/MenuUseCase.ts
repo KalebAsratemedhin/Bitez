@@ -21,19 +21,27 @@ export interface MenuUseCaseDeps {
 }
 
 function ownerIdString(restaurant: Restaurant): string {
-  return typeof restaurant.ownerId === "string"
-    ? restaurant.ownerId
-    : restaurant.ownerId._id;
+  const owner = restaurant.ownerId as unknown;
+  if (typeof owner === "string") return owner;
+  if (owner && typeof owner === "object" && "_id" in owner) {
+    const id = (owner as { _id?: unknown })._id;
+    if (id != null) return String(id);
+  }
+  return "";
 }
 
 export class MenuUseCase {
   constructor(private readonly deps: MenuUseCaseDeps) {}
 
   private async assertRestaurantOwner(restaurantId: string, userId: string): Promise<void> {
+    if (!restaurantId?.trim()) throw new Error("Restaurant not found");
+    if (!userId?.trim()) throw new Error("Authentication required");
     const restaurant = await this.deps.restaurantRepository.findById(restaurantId);
     
     if (!restaurant) throw new Error("Restaurant not found");
-    if (ownerIdString(restaurant) !== userId) {
+    const ownerId = ownerIdString(restaurant);
+    if (!ownerId) throw new Error("Restaurant owner is not set");
+    if (ownerId !== userId) {
       throw new Error("Not the owner of this restaurant");
     }
   }

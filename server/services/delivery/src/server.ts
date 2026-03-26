@@ -3,6 +3,8 @@ import express from "express";
 import morgan from "morgan";
 import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
+import { requestContextMiddleware } from "./infrastructure/http/requestContext.js";
+import { createErrorHandler } from "./infrastructure/http/errorHandler.js";
 import { DeliveryRepository } from "./infrastructure/repositories/DeliveryRepository.js";
 import { DeliveryPersonRepository } from "./infrastructure/repositories/DeliveryPersonRepository.js";
 import { DeliveryUseCase } from "./application/usecases/DeliveryUseCase.js";
@@ -21,7 +23,9 @@ const SERVICE_NAME = "delivery";
 const logger = createLogger({ serviceName: SERVICE_NAME });
 
 const app = express();
-app.use(morgan("combined"));
+app.use(requestContextMiddleware);
+morgan.token("requestId", (req) => (req as { context?: { requestId?: string } }).context?.requestId ?? "-");
+app.use(morgan(":method :url :status :response-time ms requestId=:requestId"));
 app.use(express.json());
 
 const PORT = Number(process.env.PORT) || 3004;
@@ -85,19 +89,29 @@ async function start() {
     getUserById,
   });
 
-  const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
-  await startOrderEventConsumer(rabbitUrl, orderReadModelRepository, logger);
-  await startUserRegisteredConsumer(rabbitUrl, deliveryUseCase, userReadModelRepository, logger);
-  await startDeliveryPersonRatingUpdatedConsumer(rabbitUrl, deliveryPersonRepository);
-  await startOrderReadyForDeliveryConsumer(rabbitUrl, deliveryUseCase, logger);
-
   const deliveryController = new DeliveryController(deliveryUseCase);
   const deliveryRoutes = createDeliveryRoutes(deliveryController);
 
   app.use("/delivery", deliveryRoutes);
   app.use("/", deliveryRoutes);
+  app.use(createErrorHandler(logger));
 
   app.listen(PORT, "0.0.0.0");
+  logger.info({ port: PORT }, "Delivery service started");
+
+  const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
+  startOrderEventConsumer(rabbitUrl, orderReadModelRepository, logger).catch((err) =>
+    logger.error({ err }, "order event consumer failed")
+  );
+  startUserRegisteredConsumer(rabbitUrl, deliveryUseCase, userReadModelRepository, logger).catch((err) =>
+    logger.error({ err }, "user registered consumer failed")
+  );
+  startDeliveryPersonRatingUpdatedConsumer(rabbitUrl, deliveryPersonRepository, logger).catch((err) =>
+    logger.error({ err }, "delivery person rating consumer failed")
+  );
+  startOrderReadyForDeliveryConsumer(rabbitUrl, deliveryUseCase, logger).catch((err) =>
+    logger.error({ err }, "order ready for delivery consumer failed")
+  );
 }
 
 start().catch(() => process.exit(1));

@@ -17,14 +17,15 @@ export class AuthUseCase {
             role,
             isActive,
         }));
-        if (role === "delivery_person") {
-            await this.deps.eventPublisher.publish("user.registered", {
-                userId: String(user._id),
-                role: "delivery_person",
-            });
-        }
-        const roleVal = Array.isArray(user.role) ? user.role[0] : user.role;
         const userId = String(user._id);
+        await this.deps.eventPublisher.publish("user.registered", {
+            userId,
+            name: name ?? "",
+            email: email ?? "",
+            phoneNumber: phoneNumber ?? "",
+            role: Array.isArray(role) ? role[0] : role,
+        });
+        const roleVal = Array.isArray(user.role) ? user.role[0] : user.role;
         const token = await this.deps.tokenService.sign({ id: userId, role: roleVal });
         return { token, user: { id: userId, name, email, role: roleVal } };
     }

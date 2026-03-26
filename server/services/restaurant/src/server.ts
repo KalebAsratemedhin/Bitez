@@ -5,6 +5,8 @@ import path from "path";
 
 import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
+import { requestContextMiddleware } from "./infrastructure/http/requestContext.js";
+import { createErrorHandler } from "./infrastructure/http/errorHandler.js";
 import { RestaurantUseCase } from "./application/usecases/RestaurantUseCase.js";
 import { MenuUseCase } from "./application/usecases/MenuUseCase.js";
 import { RestaurantController } from "./infrastructure/controllers/RestaurantController.js";
@@ -21,7 +23,9 @@ import { startDeliveryDeliveredConsumer } from "./infrastructure/messaging/deliv
 import { CloudinaryService } from "./infrastructure/services/CloudinaryService.js";
 
 const app = express();
-app.use(morgan("combined"));
+app.use(requestContextMiddleware);
+morgan.token("requestId", (req) => (req as { context?: { requestId?: string } }).context?.requestId ?? "-");
+app.use(morgan(":method :url :status :response-time ms requestId=:requestId"));
 app.use(express.json());
 
 const PORT = Number(process.env.PORT) || 3002;
@@ -73,11 +77,15 @@ app.use("/menu", createMenuRoutes(menuController));
 app.use("/", createRestaurantRoutes(restaurantController));
 
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use(createErrorHandler(logger));
 
 async function start() {
   await connectDB();
-  await startDeliveryDeliveredConsumer(rabbitUrl, deliveredToRepository, logger);
   app.listen(PORT, "0.0.0.0");
+  logger.info({ port: PORT }, "Restaurant service started");
+  startDeliveryDeliveredConsumer(rabbitUrl, deliveredToRepository, logger).catch((err) =>
+    logger.error({ err }, "delivery delivered consumer failed")
+  );
 }
 
 start().catch(() => process.exit(1));

@@ -3,6 +3,8 @@ import express from "express";
 import morgan from "morgan";
 import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
+import { requestContextMiddleware } from "./infrastructure/http/requestContext.js";
+import { createErrorHandler } from "./infrastructure/http/errorHandler.js";
 import { AuthUseCase } from "./application/usecases/AuthUseCase.js";
 import { AuthController } from "./infrastructure/controllers/AuthController.js";
 import { UserRepository } from "./infrastructure/repositories/UserRepository.js";
@@ -15,7 +17,10 @@ import { createAuthRoutes } from "./infrastructure/web/authRoutes.js";
 const SERVICE_NAME = "auth";
 const logger = createLogger({ serviceName: SERVICE_NAME });
 const app = express();
-app.use(morgan("combined"));
+
+app.use(requestContextMiddleware);
+morgan.token("requestId", (req) => (req as { context?: { requestId?: string } }).context?.requestId ?? "-");
+app.use(morgan(":method :url :status :response-time ms requestId=:requestId"));
 app.use(express.json());
 
 const PORT = Number(process.env.PORT) || 3001;
@@ -45,6 +50,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/", createAuthRoutes(authController));
+app.use(createErrorHandler(logger));
 
 async function start() {
   await connectDB();

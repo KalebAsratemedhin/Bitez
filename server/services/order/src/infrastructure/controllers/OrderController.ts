@@ -1,6 +1,7 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import type { OrderUseCase } from "../../application/usecases/OrderUseCase.js";
 import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
+import { AppError } from "../http/errors.js";
 
 function getUserId(req: AuthenticatedRequest): string {
   return req.user!.id;
@@ -31,7 +32,7 @@ function orderErrorStatus(message: string): number {
 export class OrderController {
   constructor(private readonly orderUseCase: OrderUseCase) {}
 
-  createOrder = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  createOrder = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const order = await this.orderUseCase.createOrder({
         ...req.body,
@@ -39,13 +40,16 @@ export class OrderController {
       });
       res.status(201).json({ success: true, message: "Order created successfully.", order });
     } catch (e) {
-      const message = (e as Error).message;
-      const status = message?.includes("not active") ? 400 : 500;
-      res.status(status).json({ success: false, message });
+      const message = (e as Error).message ?? "";
+      if (message.includes("not active")) {
+        next(new AppError({ code: "BAD_REQUEST", status: 400, message, expose: true, cause: e }));
+        return;
+      }
+      next(e);
     }
   };
 
-  updateOrderStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  updateOrderStatus = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = String(req.params.id ?? "").split(",")[0];
       const order = await this.orderUseCase.updateOrderStatus({
@@ -55,12 +59,19 @@ export class OrderController {
       });
       res.status(200).json({ success: true, order });
     } catch (e) {
-      const message = (e as Error).message;
-      res.status(orderErrorStatus(message)).json({ success: false, message });
+      const message = (e as Error).message ?? "";
+      const status = orderErrorStatus(message);
+      const code =
+        status === 400 ? "BAD_REQUEST"
+        : status === 401 ? "UNAUTHORIZED"
+        : status === 403 ? "FORBIDDEN"
+        : status === 404 ? "NOT_FOUND"
+        : "INTERNAL";
+      next(new AppError({ code, status, message: status >= 500 ? "Internal server error" : message, expose: status < 500, cause: e }));
     }
   };
 
-  cancelOrder = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  cancelOrder = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = String(req.params.id ?? "").split(",")[0];
       const order = await this.orderUseCase.cancelOrder({
@@ -69,17 +80,18 @@ export class OrderController {
       });
       res.status(200).json({ success: true, order });
     } catch (e) {
-      const message = (e as Error).message;
+      const message = (e as Error).message ?? "";
       const status =
-        message?.includes("authorized") ? 401
-        : message?.includes("already") || message?.includes("cannot") ? 400
-        : message?.includes("not found") ? 404
+        message.includes("authorized") ? 401
+        : message.includes("already") || message.includes("cannot") ? 400
+        : message.includes("not found") ? 404
         : 500;
-      res.status(status).json({ success: false, message });
+      const code = status === 400 ? "BAD_REQUEST" : status === 401 ? "UNAUTHORIZED" : status === 404 ? "NOT_FOUND" : "INTERNAL";
+      next(new AppError({ code, status, message: status >= 500 ? "Internal server error" : message, expose: status < 500, cause: e }));
     }
   };
 
-  getAllOrders = async (req: Request, res: Response): Promise<void> => {
+  getAllOrders = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { page, limit } = parsePageLimit(req);
       const { orders, total } = await this.orderUseCase.getAllOrders(page, limit);
@@ -89,11 +101,11 @@ export class OrderController {
         pagination: paginationMeta(total, page, limit),
       });
     } catch (e) {
-      res.status(500).json({ success: false, message: (e as Error).message });
+      next(e);
     }
   };
 
-  getCustomerOrders = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  getCustomerOrders = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { page, limit } = parsePageLimit(req);
       const { orders, total } = await this.orderUseCase.getOrdersByCustomerId(
@@ -107,11 +119,11 @@ export class OrderController {
         pagination: paginationMeta(total, page, limit),
       });
     } catch (e) {
-      res.status(500).json({ success: false, message: (e as Error).message });
+      next(e);
     }
   };
 
-  getRestaurantOrders = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  getRestaurantOrders = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { page, limit } = parsePageLimit(req);
       const id = String(req.params.id ?? "").split(",")[0];
@@ -126,55 +138,59 @@ export class OrderController {
         pagination: paginationMeta(total, page, limit),
       });
     } catch (e) {
-      res.status(500).json({ success: false, message: (e as Error).message });
+      next(e);
     }
   };
 
-  getOrderById = async (req: Request, res: Response): Promise<void> => {
+  getOrderById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = String(req.params.id ?? "").split(",")[0];
       const order = await this.orderUseCase.getOrderById(id);
       if (!order) {
-        res.status(404).json({ success: false, message: "Order not found" });
+        next(new AppError({ code: "NOT_FOUND", status: 404, message: "Order not found", expose: true }));
         return;
       }
       res.status(200).json({ success: true, order });
     } catch (e) {
-      res.status(500).json({ success: false, message: (e as Error).message });
+      next(e);
     }
   };
 
   /** Internal: enriched order (restaurant + customer) for delivery service. */
-  getInternalOrderById = async (req: Request, res: Response): Promise<void> => {
+  getInternalOrderById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = String(req.params.id ?? "").split(",")[0];
       const order = await this.orderUseCase.getOrderByIdEnriched(id);
       if (!order) {
-        res.status(404).json({ success: false, message: "Order not found" });
+        next(new AppError({ code: "NOT_FOUND", status: 404, message: "Order not found", expose: true }));
         return;
       }
       res.status(200).json(order);
     } catch (e) {
-      res.status(500).json({ success: false, message: (e as Error).message });
+      next(e);
     }
   };
 
-  payForOrder = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  payForOrder = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
+      if (!process.env.SERVER_URL) {
+        next(new AppError({ code: "INTERNAL", status: 500, message: "SERVER_URL not configured", expose: false }));
+        return;
+      }
       const result = await this.orderUseCase.initializePayment({
         orderId: req.body.orderId,
         total: req.body.total,
         userId: getUserId(req),
-        serverUrl: process.env.SERVER_URL!,
+        serverUrl: process.env.SERVER_URL,
         authHeader: getAuthHeader(req),
       });
       res.status(201).json({ message: result.message, url: result.checkoutUrl });
     } catch (e) {
-      res.status(500).json({ message: (e as Error).message });
+      next(e);
     }
   };
 
-  paymentSuccess = async (req: Request, res: Response): Promise<void> => {
+  paymentSuccess = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const token = Array.isArray(req.query.token) ? req.query.token[0] : req.query.token;
       const { orderId } = await this.orderUseCase.paymentSuccessCallback({
@@ -183,7 +199,7 @@ export class OrderController {
       const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
       res.redirect(`${clientUrl}/order-confirmation/${orderId}`);
     } catch (e) {
-      res.status(500).json({ success: false, message: (e as Error).message });
+      next(e);
     }
   };
 }

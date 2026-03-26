@@ -1,9 +1,10 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import type { RestaurantUseCase } from "../../application/usecases/RestaurantUseCase.js";
 import type { RatingRepository } from "../repositories/RatingRepository.js";
 import type { MenuRepository } from "../repositories/MenuRepository.js";
 import type { CloudinaryService } from "../services/CloudinaryService.js";
 import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
+import { AppError } from "../http/errors.js";
 
 function getUserId(req: AuthenticatedRequest): string {
   return req.user!.id;
@@ -64,7 +65,7 @@ export class RestaurantController {
       : 0;
   }
 
-  getMine = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  getMine = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const page = Math.max(1, Number(req.query.page) || 1);
       const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
@@ -88,11 +89,11 @@ export class RestaurantController {
         currentPage: result.currentPage,
       });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      next(e);
     }
   };
 
-  create = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  create = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = getUserId(req);
       const body = req.body as {
@@ -136,11 +137,11 @@ export class RestaurantController {
       });
       res.status(201).json({ message: "Restaurant created successfully" });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      next(e);
     }
   };
 
-  update = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  update = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = String(req.params.id ?? "").split(",")[0];
       const body = req.body as {
@@ -191,26 +192,38 @@ export class RestaurantController {
       res.json({ message: "Restaurant updated successfully" });
     } catch (e) {
       const err = e as Error;
-      if (err.message?.includes("Not the owner")) res.status(403).json({ error: err.message });
-      else if (err.message?.includes("not found")) res.status(404).json({ error: err.message });
-      else res.status(500).json({ error: err.message });
+      if (err.message?.includes("Not the owner")) {
+        next(new AppError({ code: "FORBIDDEN", status: 403, message: err.message, expose: true, cause: e }));
+        return;
+      }
+      if (err.message?.includes("not found")) {
+        next(new AppError({ code: "NOT_FOUND", status: 404, message: err.message, expose: true, cause: e }));
+        return;
+      }
+      next(e);
     }
   };
 
-  delete = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  delete = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = String(req.params.id ?? "").split(",")[0];
       await this.restaurantUseCase.delete(id, getUserId(req));
       res.json({ message: "Restaurant deleted successfully" });
     } catch (e) {
       const err = e as Error;
-      if (err.message?.includes("Not the owner")) res.status(403).json({ error: err.message });
-      else if (err.message?.includes("not found")) res.status(404).json({ error: err.message });
-      else res.status(500).json({ error: err.message });
+      if (err.message?.includes("Not the owner")) {
+        next(new AppError({ code: "FORBIDDEN", status: 403, message: err.message, expose: true, cause: e }));
+        return;
+      }
+      if (err.message?.includes("not found")) {
+        next(new AppError({ code: "NOT_FOUND", status: 404, message: err.message, expose: true, cause: e }));
+        return;
+      }
+      next(e);
     }
   };
 
-  getActive = async (req: Request, res: Response): Promise<void> => {
+  getActive = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const page = Math.max(1, Number(req.query.page) || 1);
       const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
@@ -231,26 +244,26 @@ export class RestaurantController {
         currentPage: result.currentPage,
       });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message || "Internal server error" });
+      next(e);
     }
   };
 
-  getById = async (req: Request, res: Response): Promise<void> => {
+  getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = String(req.params.id ?? "").split(",")[0];
       const restaurant = await this.restaurantUseCase.getById(id);
       if (!restaurant) {
-        res.status(404).json({ error: "Restaurant not found" });
+        next(new AppError({ code: "NOT_FOUND", status: 404, message: "Restaurant not found", expose: true }));
         return;
       }
       const rating = await this.getAverageRatingForRestaurant(id);
       res.json({ message: "OK", data: toRestaurantResponse(restaurant, rating) });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      next(e);
     }
   };
 
-  getTopRestaurants = async (_req: Request, res: Response): Promise<void> => {
+  getTopRestaurants = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await this.restaurantUseCase.getTopRestaurants(50);
       const withRatings = await Promise.all(
@@ -269,11 +282,11 @@ export class RestaurantController {
       const data = top.map(({ r, rating }) => toRestaurantResponse(r, rating));
       res.json(data);
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message || "Internal server error" });
+      next(e);
     }
   };
 
-  getTopMenuItems = async (_req: Request, res: Response): Promise<void> => {
+  getTopMenuItems = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!this.ratingRepository || !this.menuRepository) {
         res.json([]);
@@ -324,7 +337,7 @@ export class RestaurantController {
       });
       res.json(ordered);
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      next(e);
     }
   };
 }

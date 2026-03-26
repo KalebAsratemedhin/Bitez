@@ -1,15 +1,16 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import type { NotificationUseCase } from "../../application/usecases/NotificationUseCase.js";
 import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
+import { AppError } from "../http/errors.js";
 
 export class NotificationController {
   constructor(private readonly notificationUseCase: NotificationUseCase) {}
 
-  notify = async (req: Request, res: Response): Promise<void> => {
+  notify = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { userId, message, type } = req.body;
       if (!userId || !message) {
-        res.status(400).json({ error: "userId and message required" });
+        next(new AppError({ code: "BAD_REQUEST", status: 400, message: "userId and message required", expose: true }));
         return;
       }
       await this.notificationUseCase.create({
@@ -19,11 +20,11 @@ export class NotificationController {
       });
       res.status(201).json({ success: true });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      next(e);
     }
   };
 
-  list = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  list = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user!.id;
       const list = await this.notificationUseCase.listForUser({ userId });
@@ -38,11 +39,11 @@ export class NotificationController {
       });
       res.json(out);
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      next(e);
     }
   };
 
-  markAsSeen = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  markAsSeen = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user!.id;
       const id = String(req.params.id ?? "").split(",")[0];
@@ -59,8 +60,11 @@ export class NotificationController {
       });
     } catch (e) {
       const err = e as Error;
-      if (err.message?.includes("not found")) res.status(404).json({ error: err.message });
-      else res.status(500).json({ error: err.message });
+      if (err.message?.includes("not found")) {
+        next(new AppError({ code: "NOT_FOUND", status: 404, message: err.message, expose: true, cause: e }));
+        return;
+      }
+      next(e);
     }
   };
 }

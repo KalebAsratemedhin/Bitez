@@ -1,4 +1,5 @@
 import amqp from "amqplib";
+import type { Logger } from "../../logger.js";
 import type { DeliveryPersonRepository } from "../repositories/DeliveryPersonRepository.js";
 
 const EXCHANGE = "bitez";
@@ -9,6 +10,7 @@ const ROUTING_KEY = "delivery_person.rating.updated";
 export async function startDeliveryPersonRatingUpdatedConsumer(
   url: string,
   deliveryPersonRepository: DeliveryPersonRepository,
+  logger: Logger,
 ): Promise<() => Promise<void>> {
   const connection = await amqp.connect(url);
   const channel = await connection.createChannel();
@@ -16,6 +18,7 @@ export async function startDeliveryPersonRatingUpdatedConsumer(
   await channel.assertQueue(QUEUE, { durable: true });
   await channel.bindQueue(QUEUE, EXCHANGE, ROUTING_KEY);
   channel.prefetch(1);
+  const log = logger.child({ event: ROUTING_KEY, queue: QUEUE });
 
   await channel.consume(QUEUE, async (msg: amqp.ConsumeMessage | null) => {
     if (!msg) return;
@@ -30,8 +33,27 @@ export async function startDeliveryPersonRatingUpdatedConsumer(
           payload.averageRating,
         );
       }
+      log.info(
+        { deliveryPersonId: payload.deliveryPersonId, averageRating: payload.averageRating },
+        "delivery_person.rating.updated processed",
+      );
       channel.ack(msg);
-    } catch {
+    } catch (err) {
+      log.error(
+        {
+          err,
+          msg: {
+            consumerTag: msg.fields.consumerTag,
+            deliveryTag: msg.fields.deliveryTag,
+            redelivered: msg.fields.redelivered,
+            exchange: msg.fields.exchange,
+            routingKey: msg.fields.routingKey,
+            messageId: msg.properties.messageId,
+            correlationId: msg.properties.correlationId,
+          },
+        },
+        "delivery_person.rating.updated consumer error",
+      );
       channel.nack(msg, false, true);
     }
   });

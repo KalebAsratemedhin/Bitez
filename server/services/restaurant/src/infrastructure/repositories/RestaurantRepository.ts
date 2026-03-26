@@ -33,10 +33,7 @@ export class RestaurantRepository implements IRestaurantRepository {
   }
 
   async findById(id: string, _populate?: string[]): Promise<RestaurantEntity | null> {
-    const doc = await Restaurant.findById(id)
-      .populate("ownerId", "name email phoneNumber")
-      .populate("menu")
-      .lean();
+    const doc = await Restaurant.findById(id).lean();
     if (!doc) return null;
     return toRestaurant(doc as Record<string, unknown>);
   }
@@ -95,11 +92,7 @@ export class RestaurantRepository implements IRestaurantRepository {
   async findAllPaginated(page = 1, limit = 10): Promise<PaginatedRestaurants> {
     const skip = (page - 1) * limit;
     const [restaurants, total] = await Promise.all([
-      Restaurant.find()
-        .populate("owner", "name email phoneNumber")
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+      Restaurant.find().skip(skip).limit(limit).lean(),
       Restaurant.countDocuments(),
     ]);
     return {

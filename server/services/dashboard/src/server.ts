@@ -3,6 +3,8 @@ import express from "express";
 import morgan from "morgan";
 import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
+import { requestContextMiddleware } from "./infrastructure/http/requestContext.js";
+import { createErrorHandler } from "./infrastructure/http/errorHandler.js";
 import { createDashboardReadModelsAdapter } from "./infrastructure/repositories/DashboardReadModelsAdapter.js";
 import { DashboardUseCase } from "./application/usecases/DashboardUseCase.js";
 import { DashboardController } from "./infrastructure/controllers/DashboardController.js";
@@ -12,7 +14,9 @@ import { startDashboardEventConsumers } from "./infrastructure/messaging/dashboa
 const SERVICE_NAME = "dashboard";
 const logger = createLogger({ serviceName: SERVICE_NAME });
 const app = express();
-app.use(morgan("combined"));
+app.use(requestContextMiddleware);
+morgan.token("requestId", (req) => (req as { context?: { requestId?: string } }).context?.requestId ?? "-");
+app.use(morgan(":method :url :status :response-time ms requestId=:requestId"));
 app.use(express.json());
 
 const PORT = Number(process.env.PORT) || 3006;
@@ -27,13 +31,16 @@ async function start() {
   const readModels = createDashboardReadModelsAdapter();
   const dashboardUseCase = new DashboardUseCase(readModels);
   const dashboardController = new DashboardController(dashboardUseCase);
-
-  const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
-  await startDashboardEventConsumers(rabbitUrl, logger);
-
   app.use("/", createDashboardRoutes(dashboardController));
+  app.use(createErrorHandler(logger));
 
   app.listen(PORT, "0.0.0.0");
+  logger.info({ port: PORT }, "Dashboard service started");
+
+  const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
+  startDashboardEventConsumers(rabbitUrl, logger).catch((err) =>
+    logger.error({ err }, "dashboard event consumers failed")
+  );
 }
 
 start().catch(() => process.exit(1));
