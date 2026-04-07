@@ -9,9 +9,10 @@ Bitez is a dining and delivery platform that connects restaurants, customers, an
 |-----------|------|
 | Client    | Next.js, React, TypeScript, Tailwind, Radix UI, Redux Toolkit Query |
 | Gateway   | Express, http-proxy-middleware, morgan |
-| Services  | Express, TypeScript, MongoDB, JWT |
+| Services  | Express, TypeScript, MongoDB, JWT, **Pino** (structured JSON logs) |
 | Messaging | RabbitMQ (topic exchange `bitez`) |
 | Infra     | Docker Compose |
+| Observability (optional) | Grafana, Loki, Promtail, Prometheus — see `server/observability/` |
 
 ---
 
@@ -21,7 +22,7 @@ Bitez is a dining and delivery platform that connects restaurants, customers, an
 Bitez/
 ├── client/                 # Next.js app (port 3000)
 └── server/
-    ├── gateway/            # API gateway (port 8080)
+    ├── gateway/            # API gateway (host port 8080 by default; see below)
     ├── services/
     │   ├── auth/           # Auth, users, profile (3001)
     │   ├── restaurant/     # Restaurants, menus, ratings (3002)
@@ -29,6 +30,7 @@ Bitez/
     │   ├── delivery/       # Deliveries, delivery persons (3004)
     │   ├── notification/   # User notifications (3005)
     │   └── dashboard/      # Read-model dashboards (3006)
+    ├── observability/      # Optional: Grafana/Loki/Prometheus stack (see README inside)
     └── docker-compose.yml
 ```
 
@@ -94,6 +96,39 @@ Bitez/
 
 ---
 
+## Backend: logging and API errors
+
+Each service uses **structured logging** (Pino) and a shared pattern for HTTP:
+
+- **Request correlation**: Every request gets an `X-Request-Id` header (or one is generated). It is echoed on the response and included in access logs.
+- **Errors**: Failures are logged in full on the server (stack and context). Responses use a **consistent JSON shape** so internal exception text is not exposed to clients:
+
+```json
+{
+  "error": {
+    "code": "INTERNAL",
+    "message": "Internal server error",
+    "requestId": "req_..."
+  }
+}
+```
+
+Expected validation or auth failures may use other `code` values and user-safe `message` text. Use the `requestId` from a failing response to find the matching log line.
+
+Implementation lives under each service at `src/infrastructure/http/` (`requestContext`, `errors`, `errorHandler`).
+
+---
+
+## Observability (optional UI)
+
+For browser-based **logs** (Grafana + Loki), **metrics** (Prometheus), and optional **RabbitMQ Management** / **Mongo Express**, see:
+
+- **`server/observability/README.md`**
+
+That stack is **separate** from `server/docker-compose.yml` and uses its own compose file. Default ports include Grafana on **3007** (so it does not clash with the client on 3000).
+
+---
+
 ## Run locally
 
 1. **Backend (from project root)**  
@@ -102,10 +137,20 @@ Bitez/
 
 2. **Client**  
    `cd client && npm install && npm run dev`  
-   App at `http://localhost:3000`. Set `NEXT_PUBLIC_API_URL=http://localhost:8080` so the client talks to the gateway.
+   App at `http://localhost:3000`. Set `NEXT_PUBLIC_API_URL=http://localhost:8080` so the client talks to the gateway (or match whatever host port you use for the gateway; see below).
 
 3. **Optional env**  
-   Create `.env` (or set in the environment) for `JWT_SECRET`, `CLOUDINARY_*`, `CHAPA_AUTH`, etc. See `server/docker-compose.yml` and service code for names.
+   Create `.env` (or set in the environment) for `JWT_SECRET`, `CLOUDINARY_*`, `CHAPA_AUTH`, `SERVER_URL`, `CLIENT_URL`, etc. See `server/docker-compose.yml` and service code for names.
+
+### If port 8080 is already in use
+
+The gateway binds host port **8080** by default (`GATEWAY_PORT` in `server/docker-compose.yml`). If another process or container already uses 8080, either stop it or run with a different port, for example:
+
+```bash
+GATEWAY_PORT=18080 docker compose -f server/docker-compose.yml up --build
+```
+
+Then point the client at `http://localhost:18080` (`NEXT_PUBLIC_API_URL`).
 
 ---
 
