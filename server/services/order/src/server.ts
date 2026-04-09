@@ -62,7 +62,10 @@ async function start() {
       return { _id: fromReadModel.userId, name: fromReadModel.name, phoneNumber: fromReadModel.phoneNumber };
     }
     try {
-      const res = await fetch(`${authBase}/internal/user/${encodeURIComponent(id)}`);
+      const token = process.env.INTERNAL_SERVICE_TOKEN?.trim();
+      const headers: Record<string, string> = {};
+      if (token) headers["X-Internal-Token"] = token;
+      const res = await fetch(`${authBase}/internal/user/${encodeURIComponent(id)}`, { headers });
       if (!res.ok) return null;
       return (await res.json()) as { _id: string; name: string; phoneNumber?: string };
     } catch {

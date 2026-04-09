@@ -30,7 +30,7 @@ wait_for_port() {
     sleep 1
   done
   log "WARNING: $_name did not become ready (port ${_port}) after ${READINESS_SAFETY_CAP}s."
-  return 0
+  return 1
 }
 
 # ---- MongoDB ----

@@ -41,9 +41,9 @@ const eventPublisher = new RabbitMQEventPublisher(
 );
 const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
 const cloudinary = new CloudinaryService({
-  cloudName: process.env.CLOUDINARY_CLOUD_NAME || "debpwhgnx",
-  apiKey: process.env.CLOUDINARY_API_KEY || "987663357468171",
-  apiSecret: process.env.CLOUDINARY_API_SECRET || "",
+  cloudName: process.env.CLOUDINARY_CLOUD_NAME ?? "",
+  apiKey: process.env.CLOUDINARY_API_KEY ?? "",
+  apiSecret: process.env.CLOUDINARY_API_SECRET ?? "",
 });
 
 const restaurantUseCase = new RestaurantUseCase({
@@ -81,6 +81,13 @@ app.use(createErrorHandler(logger));
 
 async function start() {
   await connectDB();
+  if (process.env.NODE_ENV === "production") {
+    const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
+    if (!CLOUDINARY_CLOUD_NAME?.trim() || !CLOUDINARY_API_KEY?.trim() || !CLOUDINARY_API_SECRET?.trim()) {
+      logger.error("CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET are required in production");
+      process.exit(1);
+    }
+  }
   app.listen(PORT, "0.0.0.0");
   logger.info({ port: PORT }, "Restaurant service started");
   startDeliveryDeliveredConsumer(rabbitUrl, deliveredToRepository, logger).catch((err) =>

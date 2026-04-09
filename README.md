@@ -139,8 +139,12 @@ That stack is **separate** from `server/docker-compose.yml` and uses its own com
    `cd client && npm install && npm run dev`  
    App at `http://localhost:3000`. Set `NEXT_PUBLIC_API_URL=http://localhost:8080` so the client talks to the gateway (or match whatever host port you use for the gateway; see below).
 
-3. **Optional env**  
-   Create `.env` (or set in the environment) for `JWT_SECRET`, `CLOUDINARY_*`, `CHAPA_AUTH`, `SERVER_URL`, `CLIENT_URL`, etc. See `server/docker-compose.yml` and service code for names.
+3. **Environment variables**  
+   Create a `.env` next to `server/docker-compose.yml` (or export in your shell) for secrets and URLs. See [server/docker-compose.yml](server/docker-compose.yml) for the full list.
+
+   - **`INTERNAL_SERVICE_TOKEN`** — Shared secret for server-to-server routes (`/internal/*` on auth and order, and selected delivery endpoints). Compose defaults to `bitez-internal-dev` for local use; **set a strong value in production** and keep it identical across `auth`, `order`, `delivery`, and `restaurant`.
+   - **`CLOUDINARY_*`** — Required for restaurant/menu image uploads. Hardcoded defaults were removed from code; set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET`. In production the restaurant service exits on startup if any are missing.
+   - **`JWT_SECRET`**, **`CHAPA_AUTH`**, **`SERVER_URL`**, **`CLIENT_URL`** — As before for auth, payments, and redirects.
 
 ### If port 8080 is already in use
 

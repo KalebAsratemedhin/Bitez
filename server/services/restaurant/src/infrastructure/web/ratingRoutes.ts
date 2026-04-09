@@ -56,7 +56,10 @@ export function createRatingRoutes(
         const base = deliveryServiceUrl.replace(/\/$/, "");
         const url = `${base}/delivery-person/${encodeURIComponent(entityId)}/delivered-to/${encodeURIComponent(userId)}`;
         try {
-          const resp = await fetch(url);
+          const token = process.env.INTERNAL_SERVICE_TOKEN?.trim();
+          const headers: Record<string, string> = {};
+          if (token) headers["X-Internal-Token"] = token;
+          const resp = await fetch(url, { headers });
           if (resp.ok) {
             const data = (await resp.json()) as { delivered?: boolean };
             delivered = Boolean(data.delivered);

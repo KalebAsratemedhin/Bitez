@@ -7,6 +7,10 @@ function getUserId(req: AuthenticatedRequest): string {
   return req.user!.id;
 }
 
+function getUserRole(req: AuthenticatedRequest): string | undefined {
+  return req.user?.role;
+}
+
 function getAuthHeader(req: Request): string | undefined {
   const h = req.headers.authorization ?? (req.headers as Record<string, string>).Authorization;
   return typeof h === "string" ? h : undefined;
@@ -91,16 +95,25 @@ export class OrderController {
     }
   };
 
-  getAllOrders = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  getAllOrders = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { page, limit } = parsePageLimit(req);
-      const { orders, total } = await this.orderUseCase.getAllOrders(page, limit);
+      const { orders, total } = await this.orderUseCase.getAllOrdersForAdmin(
+        getUserRole(req),
+        page,
+        limit,
+      );
       res.json({
         success: true,
         data: orders,
         pagination: paginationMeta(total, page, limit),
       });
     } catch (e) {
+      const message = (e as Error).message ?? "";
+      if (message.includes("not authorized")) {
+        next(new AppError({ code: "FORBIDDEN", status: 403, message, expose: true, cause: e }));
+        return;
+      }
       next(e);
     }
   };
@@ -127,8 +140,10 @@ export class OrderController {
     try {
       const { page, limit } = parsePageLimit(req);
       const id = String(req.params.id ?? "").split(",")[0];
-      const { orders, total } = await this.orderUseCase.getOrdersByRestaurantId(
+      const { orders, total } = await this.orderUseCase.getOrdersByRestaurantIdForRequester(
         id,
+        getUserId(req),
+        getUserRole(req),
         page,
         limit,
       );
@@ -138,20 +153,38 @@ export class OrderController {
         pagination: paginationMeta(total, page, limit),
       });
     } catch (e) {
+      const message = (e as Error).message ?? "";
+      if (message.includes("not authorized")) {
+        next(new AppError({ code: "FORBIDDEN", status: 403, message, expose: true, cause: e }));
+        return;
+      }
+      if (message.includes("not found")) {
+        next(new AppError({ code: "NOT_FOUND", status: 404, message, expose: true, cause: e }));
+        return;
+      }
       next(e);
     }
   };
 
-  getOrderById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  getOrderById = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = String(req.params.id ?? "").split(",")[0];
-      const order = await this.orderUseCase.getOrderById(id);
+      const order = await this.orderUseCase.getOrderByIdForRequester(
+        id,
+        getUserId(req),
+        getUserRole(req),
+      );
       if (!order) {
         next(new AppError({ code: "NOT_FOUND", status: 404, message: "Order not found", expose: true }));
         return;
       }
       res.status(200).json({ success: true, order });
     } catch (e) {
+      const message = (e as Error).message ?? "";
+      if (message.includes("not authorized")) {
+        next(new AppError({ code: "FORBIDDEN", status: 403, message, expose: true, cause: e }));
+        return;
+      }
       next(e);
     }
   };

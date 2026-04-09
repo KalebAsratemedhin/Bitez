@@ -107,7 +107,7 @@ export class OrderUseCase {
       restaurantID,
       deliveryAddress,
       status: OrderStatus.PENDING,
-      paymentCompleted: true,
+      paymentCompleted: false,
     });
   }
 
@@ -267,6 +267,18 @@ export class OrderUseCase {
     return this.deps.orderRepository.find({}, page, limit);
   }
 
+  async getAllOrdersForAdmin(
+    viewerRole: string | undefined,
+    page = 1,
+    limit = 10,
+  ): Promise<GetOrdersResult> {
+    const role = viewerRole ? String(viewerRole) : "";
+    if (role !== "admin") {
+      throw new Error("You are not authorized to list all orders.");
+    }
+    return this.deps.orderRepository.find({}, page, limit);
+  }
+
   async getOrdersByCustomerId(
     customerId: string,
     page = 1,
@@ -283,8 +295,57 @@ export class OrderUseCase {
     return this.deps.orderRepository.findByRestaurantId(restaurantId, page, limit);
   }
 
+  async getOrdersByRestaurantIdForRequester(
+    restaurantId: string,
+    viewerId: string,
+    viewerRole: string | undefined,
+    page = 1,
+    limit = 10,
+  ): Promise<GetOrdersResult> {
+    const role = viewerRole ? String(viewerRole) : "";
+    if (role === "admin") {
+      return this.deps.orderRepository.findByRestaurantId(restaurantId, page, limit);
+    }
+    if (role !== "restaurant_owner") {
+      throw new Error("You are not authorized to view these orders.");
+    }
+    const restaurant = await this.deps.restaurantRepository.findById(restaurantId);
+    if (!restaurant) throw new Error("Restaurant not found.");
+    const ownerId = toRefId((restaurant as { ownerId?: unknown }).ownerId);
+    if (ownerId !== viewerId) {
+      throw new Error("You are not authorized to view these orders.");
+    }
+    return this.deps.orderRepository.findByRestaurantId(restaurantId, page, limit);
+  }
+
   async getOrderById(orderId: string): Promise<unknown> {
     return this.deps.orderRepository.findById(orderId);
+  }
+
+  async getOrderByIdForRequester(
+    orderId: string,
+    viewerId: string,
+    viewerRole: string | undefined,
+  ): Promise<unknown> {
+    const role = viewerRole ? String(viewerRole) : "";
+    const order = await this.deps.orderRepository.findById(orderId);
+    if (!order) return null;
+
+    if (role === "admin") return order;
+
+    const orderRecord = order as OrderRecord;
+    const customerId = toRefId(orderRecord.customerID);
+    if (customerId && customerId === viewerId) return order;
+
+    if (role === "restaurant_owner") {
+      const restaurantId = toRefId(orderRecord.restaurantID);
+      const restaurant = await this.deps.restaurantRepository.findById(restaurantId);
+      if (!restaurant) return null;
+      const ownerId = toRefId((restaurant as { ownerId?: unknown }).ownerId);
+      if (ownerId && ownerId === viewerId) return order;
+    }
+
+    throw new Error("You are not authorized to view this order.");
   }
 
   async getOrderByIdEnriched(orderId: string): Promise<unknown | null> {

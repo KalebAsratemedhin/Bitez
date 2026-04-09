@@ -29,10 +29,27 @@ export function isAuthenticated(
   }
 }
 
+function normalizeRole(role: string | undefined): string {
+  return role ? String(role) : "";
+}
+
 export function isRestaurantOwner(
-  _req: Request,
-  _res: Response,
-  next: NextFunction
+  req: Request,
+  res: Response,
+  next: NextFunction,
 ): void {
+  const r = normalizeRole((req as AuthenticatedRequest).user?.role);
+  if (r !== "restaurant_owner") {
+    res.status(403).json({ error: "Restaurant owner access required" });
+    return;
+  }
+  next();
+}
+
+export function isAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (normalizeRole((req as AuthenticatedRequest).user?.role) !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
   next();
 }

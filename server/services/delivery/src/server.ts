@@ -52,7 +52,10 @@ async function start() {
   
   const getOrderByIdEnriched = async (orderId: string) => {
     try {
-      const res = await fetch(`${orderBase}/internal/order/${encodeURIComponent(orderId)}`);
+      const token = process.env.INTERNAL_SERVICE_TOKEN?.trim();
+      const headers: Record<string, string> = {};
+      if (token) headers["X-Internal-Token"] = token;
+      const res = await fetch(`${orderBase}/internal/order/${encodeURIComponent(orderId)}`, { headers });
       if (!res.ok) return null;
 
       return (await res.json()) as unknown;
@@ -70,7 +73,10 @@ async function start() {
       };
     }
     try {
-      const res = await fetch(`${authBase}/internal/user/${encodeURIComponent(userId)}`);
+      const token = process.env.INTERNAL_SERVICE_TOKEN?.trim();
+      const headers: Record<string, string> = {};
+      if (token) headers["X-Internal-Token"] = token;
+      const res = await fetch(`${authBase}/internal/user/${encodeURIComponent(userId)}`, { headers });
       if (!res.ok) return null;
       return (await res.json()) as { _id: string; name: string; phoneNumber?: string };
     } catch {
