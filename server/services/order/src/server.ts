@@ -3,8 +3,7 @@ import express from "express";
 import morgan from "morgan";
 import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
-import { requestContextMiddleware } from "./infrastructure/http/requestContext.js";
-import { createErrorHandler } from "./infrastructure/http/errorHandler.js";
+import { requestContextMiddleware, createErrorHandler, mountMetricsRoute } from "@bitez/shared";
 import { OrderRepository } from "./infrastructure/repositories/OrderRepository.js";
 import { OrderUseCase } from "./application/usecases/OrderUseCase.js";
 import { OrderController } from "./infrastructure/controllers/OrderController.js";
@@ -35,9 +34,14 @@ const PORT = Number(process.env.PORT) || 3003;
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: SERVICE_NAME });
 });
+mountMetricsRoute(app);
 
 async function start() {
   await connectDB();
+
+  const amqpShutdown = new AbortController();
+  process.once("SIGTERM", () => amqpShutdown.abort());
+  process.once("SIGINT", () => amqpShutdown.abort());
 
   const orderRepository = new OrderRepository();
   const restaurantRepository = new HttpRestaurantRepository(
@@ -93,13 +97,14 @@ async function start() {
   logger.info({ port: PORT }, "Order service started");
 
   const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
-  startRestaurantEventConsumer(rabbitUrl, restaurantReadModelRepository, logger).catch((err) =>
+  const amqpOpts = { signal: amqpShutdown.signal };
+  startRestaurantEventConsumer(rabbitUrl, restaurantReadModelRepository, logger, amqpOpts).catch((err) =>
     logger.error({ err }, "restaurant event consumer failed")
   );
-  startUserRegisteredConsumer(rabbitUrl, userReadModelRepository, logger).catch((err) =>
+  startUserRegisteredConsumer(rabbitUrl, userReadModelRepository, logger, amqpOpts).catch((err) =>
     logger.error({ err }, "user registered consumer failed")
   );
-  startDeliveryCreatedConsumer(rabbitUrl, orderRepository, notificationService, logger).catch((err) =>
+  startDeliveryCreatedConsumer(rabbitUrl, orderRepository, notificationService, logger, amqpOpts).catch((err) =>
     logger.error({ err }, "delivery created consumer failed")
   );
 }

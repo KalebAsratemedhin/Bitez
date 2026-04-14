@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { NotificationUseCase } from "../../application/usecases/NotificationUseCase.js";
 import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
-import { AppError } from "../http/errors.js";
+import { AppError } from "@bitez/shared";
 
 export class NotificationController {
   constructor(private readonly notificationUseCase: NotificationUseCase) {}

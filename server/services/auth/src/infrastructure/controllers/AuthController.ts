@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 
 import type { AuthUseCase } from "../../application/usecases/AuthUseCase.js";
 import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
-import { AppError } from "../http/errors.js";
+import { AppError } from "@bitez/shared";
 
 export class AuthController {
   constructor(private readonly authUseCase: AuthUseCase) {}

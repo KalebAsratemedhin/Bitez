@@ -108,7 +108,7 @@ export class DeliveryUseCase {
   }
 
   async tryAssignNextQueuedOrder(): Promise<boolean> {
-    const next = await this.deps.unassignedOrderRepository.getOldest();
+    const next = await this.deps.unassignedOrderRepository.claimOldest();
     if (!next) return false;
 
     try {
@@ -117,11 +117,9 @@ export class DeliveryUseCase {
         estimatedDeliveryTime: next.estimatedDeliveryTime,
         customerId: next.customerId,
       });
-
-      await this.deps.unassignedOrderRepository.removeByOrderId(next.orderId);
       return true;
-
     } catch {
+      await this.deps.unassignedOrderRepository.add(next);
       return false;
     }
   }
@@ -216,24 +214,41 @@ export class DeliveryUseCase {
     if (!this.deps.getUserById || deliveries.length === 0) {
       return { deliveries, total };
     }
-    const enriched = await Promise.all(
-      deliveries.map(async (d) => {
-        const doc = d as { deliveryPersonId?: { userId?: unknown; _id?: unknown } | unknown };
-        const dp = doc.deliveryPersonId;
-        if (!dp || typeof dp !== "object" || !("userId" in dp)) return d;
-        const userIdVal = (dp as { userId?: unknown }).userId;
-        const userIdStr =
-          userIdVal != null && typeof userIdVal === "object" && "_id" in userIdVal
-            ? String((userIdVal as { _id: unknown })._id)
-            : String(userIdVal ?? "");
-        const user = userIdStr ? await this.deps.getUserById!(userIdStr) : null;
-        if (!user) return d;
-        return {
-          ...doc,
-          deliveryPersonId: { ...dp, userId: { _id: user._id, name: user.name, phoneNumber: user.phoneNumber } },
-        };
+    const userIdStrs = new Set<string>();
+    for (const d of deliveries) {
+      const doc = d as { deliveryPersonId?: { userId?: unknown } | unknown };
+      const dp = doc.deliveryPersonId;
+      if (!dp || typeof dp !== "object" || !("userId" in dp)) continue;
+      const userIdVal = (dp as { userId?: unknown }).userId;
+      const userIdStr =
+        userIdVal != null && typeof userIdVal === "object" && "_id" in userIdVal
+          ? String((userIdVal as { _id: unknown })._id)
+          : String(userIdVal ?? "");
+      if (userIdStr) userIdStrs.add(userIdStr);
+    }
+    const userById = new Map<string, { _id: string; name: string; phoneNumber?: string }>();
+    await Promise.all(
+      [...userIdStrs].map(async (id) => {
+        const u = await this.deps.getUserById!(id);
+        if (u) userById.set(id, u);
       }),
     );
+    const enriched = deliveries.map((d) => {
+      const doc = d as { deliveryPersonId?: { userId?: unknown; _id?: unknown } | unknown };
+      const dp = doc.deliveryPersonId;
+      if (!dp || typeof dp !== "object" || !("userId" in dp)) return d;
+      const userIdVal = (dp as { userId?: unknown }).userId;
+      const userIdStr =
+        userIdVal != null && typeof userIdVal === "object" && "_id" in userIdVal
+          ? String((userIdVal as { _id: unknown })._id)
+          : String(userIdVal ?? "");
+      const user = userIdStr ? userById.get(userIdStr) : undefined;
+      if (!user) return d;
+      return {
+        ...doc,
+        deliveryPersonId: { ...dp, userId: { _id: user._id, name: user.name, phoneNumber: user.phoneNumber } },
+      };
+    });
     return { deliveries: enriched, total };
   }
 
@@ -266,31 +281,47 @@ export class DeliveryUseCase {
       }
     }
 
-    const getOrderForDelivery = async (orderIdStr: string): Promise<unknown | null> => {
-      if (this.deps.orderReadModelRepository) {
-        const fromReadModel = await this.deps.orderReadModelRepository.findByOrderId(orderIdStr);
-        if (fromReadModel) return fromReadModel;
-      }
-      if (this.deps.getOrderByIdEnriched) {
-        return this.deps.getOrderByIdEnriched(orderIdStr);
-      }
-      return null;
-    };
     if (deliveries.length === 0) {
       return { deliveries, total, deliveryPerson };
     }
-    const enriched = await Promise.all(
-      deliveries.map(async (d) => {
-        const doc = d as { orderId?: unknown; [k: string]: unknown };
-        const orderIdVal = doc.orderId;
-        const orderIdStr =
-          orderIdVal != null && typeof orderIdVal === "object" && "_id" in orderIdVal
-            ? String((orderIdVal as { _id: unknown })._id)
-            : String(orderIdVal ?? "");
-        const order = orderIdStr ? await getOrderForDelivery(orderIdStr) : null;
-        return { ...doc, orderId: order ?? orderIdVal };
-      }),
-    );
+    const orderIdStrs = new Set<string>();
+    for (const d of deliveries) {
+      const doc = d as { orderId?: unknown };
+      const orderIdVal = doc.orderId;
+      const orderIdStr =
+        orderIdVal != null && typeof orderIdVal === "object" && "_id" in orderIdVal
+          ? String((orderIdVal as { _id: unknown })._id)
+          : String(orderIdVal ?? "");
+      if (orderIdStr) orderIdStrs.add(orderIdStr);
+    }
+    const orderById = new Map<string, unknown>();
+    if (this.deps.orderReadModelRepository) {
+      await Promise.all(
+        [...orderIdStrs].map(async (id) => {
+          const fromReadModel = await this.deps.orderReadModelRepository!.findByOrderId(id);
+          if (fromReadModel) orderById.set(id, fromReadModel);
+        }),
+      );
+    }
+    if (this.deps.getOrderByIdEnriched) {
+      const missing = [...orderIdStrs].filter((id) => !orderById.has(id));
+      await Promise.all(
+        missing.map(async (id) => {
+          const o = await this.deps.getOrderByIdEnriched!(id);
+          if (o) orderById.set(id, o);
+        }),
+      );
+    }
+    const enriched = deliveries.map((d) => {
+      const doc = d as { orderId?: unknown; [k: string]: unknown };
+      const orderIdVal = doc.orderId;
+      const orderIdStr =
+        orderIdVal != null && typeof orderIdVal === "object" && "_id" in orderIdVal
+          ? String((orderIdVal as { _id: unknown })._id)
+          : String(orderIdVal ?? "");
+      const order = orderIdStr ? orderById.get(orderIdStr) ?? null : null;
+      return { ...doc, orderId: order ?? orderIdVal };
+    });
     return { deliveries: enriched, total, deliveryPerson };
   }
 

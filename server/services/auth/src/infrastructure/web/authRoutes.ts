@@ -2,7 +2,7 @@ import express from "express";
 import multer from "multer";
 
 import { isAuthenticated } from "./middlewares/auth.js";
-import { requireInternalServiceToken } from "./middlewares/internalAuth.js";
+import { requireInternalServiceToken } from "@bitez/shared";
 import type { AuthController } from "../controllers/AuthController.js";
 
 const upload = multer();

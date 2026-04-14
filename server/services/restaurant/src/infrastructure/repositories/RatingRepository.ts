@@ -47,6 +47,25 @@ export class RatingRepository {
     return row?.avg ?? 0;
   }
 
+  /** One aggregation for many entity IDs (avoids N+1). Missing IDs get 0. */
+  async getAverageRatingsMap(
+    entityType: string,
+    entityIds: string[],
+  ): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
+    const normalizedType = this.normalizeEntityType(entityType);
+    const ids = [...new Set(entityIds.map((id) => String(id)).filter(Boolean))];
+    if (ids.length === 0) return map;
+    const result = await Rating.aggregate([
+      { $match: { entityType: normalizedType, entityId: { $in: ids } } },
+      { $group: { _id: "$entityId", avg: { $avg: "$rating" } } },
+    ]).exec();
+    for (const row of result as { _id: string; avg?: number }[]) {
+      map.set(String(row._id), row.avg ?? 0);
+    }
+    return map;
+  }
+
   async getTopRatedEntityIds(
     entityType: string,
     limit: number

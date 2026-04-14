@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import { isAuthenticated } from "./middlewares/auth.js";
-import { requireInternalServiceToken } from "./middlewares/internalAuth.js";
+import { requireInternalServiceToken } from "@bitez/shared";
 const upload = multer();
 export function createAuthRoutes(controller) {
     const router = express.Router();

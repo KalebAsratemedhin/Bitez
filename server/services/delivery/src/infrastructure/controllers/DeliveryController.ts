@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { DeliveryUseCase } from "../../application/usecases/DeliveryUseCase.js";
 import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
-import { AppError } from "../http/errors.js";
+import { AppError } from "@bitez/shared";
 
 function getUserId(req: AuthenticatedRequest): string {
   return req.user!.id;

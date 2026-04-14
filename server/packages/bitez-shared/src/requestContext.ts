@@ -24,4 +24,3 @@ export function requestContextMiddleware(
   res.setHeader("X-Request-Id", requestId);
   next();
 }
-

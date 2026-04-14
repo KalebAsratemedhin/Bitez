@@ -1,4 +1,4 @@
-import { AppError } from "../http/errors.js";
+import { AppError } from "@bitez/shared";
 export class AuthController {
     authUseCase;
     constructor(authUseCase) {

@@ -3,8 +3,7 @@ import express from "express";
 import morgan from "morgan";
 import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
-import { requestContextMiddleware } from "./infrastructure/http/requestContext.js";
-import { createErrorHandler } from "./infrastructure/http/errorHandler.js";
+import { requestContextMiddleware, createErrorHandler, mountMetricsRoute } from "@bitez/shared";
 import { AuthUseCase } from "./application/usecases/AuthUseCase.js";
 import { AuthController } from "./infrastructure/controllers/AuthController.js";
 import { UserRepository } from "./infrastructure/repositories/UserRepository.js";
@@ -37,6 +36,7 @@ const authController = new AuthController(authUseCase);
 app.get("/health", (_req, res) => {
     res.json({ status: "ok", service: SERVICE_NAME });
 });
+mountMetricsRoute(app);
 app.use("/", createAuthRoutes(authController));
 app.use(createErrorHandler(logger));
 async function start() {

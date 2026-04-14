@@ -5,8 +5,7 @@ import path from "path";
 
 import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
-import { requestContextMiddleware } from "./infrastructure/http/requestContext.js";
-import { createErrorHandler } from "./infrastructure/http/errorHandler.js";
+import { requestContextMiddleware, createErrorHandler, mountMetricsRoute } from "@bitez/shared";
 import { RestaurantUseCase } from "./application/usecases/RestaurantUseCase.js";
 import { MenuUseCase } from "./application/usecases/MenuUseCase.js";
 import { RestaurantController } from "./infrastructure/controllers/RestaurantController.js";
@@ -63,6 +62,7 @@ const menuController = new MenuController(menuUseCase, cloudinary);
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "restaurant" });
 });
+mountMetricsRoute(app);
 
 const deliveryServiceUrl = process.env.DELIVERY_SERVICE_URL || "http://localhost:3004";
 app.use(
@@ -81,6 +81,11 @@ app.use(createErrorHandler(logger));
 
 async function start() {
   await connectDB();
+
+  const amqpShutdown = new AbortController();
+  process.once("SIGTERM", () => amqpShutdown.abort());
+  process.once("SIGINT", () => amqpShutdown.abort());
+
   if (process.env.NODE_ENV === "production") {
     const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
     if (!CLOUDINARY_CLOUD_NAME?.trim() || !CLOUDINARY_API_KEY?.trim() || !CLOUDINARY_API_SECRET?.trim()) {
@@ -90,9 +95,9 @@ async function start() {
   }
   app.listen(PORT, "0.0.0.0");
   logger.info({ port: PORT }, "Restaurant service started");
-  startDeliveryDeliveredConsumer(rabbitUrl, deliveredToRepository, logger).catch((err) =>
-    logger.error({ err }, "delivery delivered consumer failed")
-  );
+  startDeliveryDeliveredConsumer(rabbitUrl, deliveredToRepository, logger, {
+    signal: amqpShutdown.signal,
+  }).catch((err) => logger.error({ err }, "delivery delivered consumer failed"));
 }
 
 start().catch(() => process.exit(1));

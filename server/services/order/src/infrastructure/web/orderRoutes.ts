@@ -1,6 +1,6 @@
 import express from "express";
 import { isAuthenticated, isAdmin, isRestaurantOwner } from "./middlewares/auth.js";
-import { requireInternalServiceToken } from "./middlewares/internalAuth.js";
+import { requireInternalServiceToken } from "@bitez/shared";
 import type { OrderController } from "../controllers/OrderController.js";
 
 export function createOrderRoutes(controller: OrderController): express.Router {

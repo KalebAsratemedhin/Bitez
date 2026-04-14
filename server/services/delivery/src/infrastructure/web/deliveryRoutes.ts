@@ -1,6 +1,6 @@
 import express from "express";
 import { isAuthenticated, isAdmin, isDeliveryPerson } from "./middlewares/auth.js";
-import { requireInternalServiceToken } from "./middlewares/internalAuth.js";
+import { requireInternalServiceToken } from "@bitez/shared";
 import type { DeliveryController } from "../controllers/DeliveryController.js";
 
 export function createDeliveryRoutes(controller: DeliveryController): express.Router {

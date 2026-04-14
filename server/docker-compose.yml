@@ -44,8 +44,8 @@ services:
 
   auth:
     build:
-      context: ./services/auth
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/auth/Dockerfile
     environment:
       PORT: 3001
       MONGODB_URI: mongodb://mongo:27017/bitez_auth
@@ -61,8 +61,8 @@ services:
 
   restaurant:
     build:
-      context: ./services/restaurant
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/restaurant/Dockerfile
     environment:
       PORT: 3002
       MONGODB_URI: mongodb://mongo:27017/bitez_restaurant
@@ -81,8 +81,8 @@ services:
 
   order:
     build:
-      context: ./services/order
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/order/Dockerfile
     environment:
       PORT: 3003
       MONGODB_URI: mongodb://mongo:27017/bitez_order
@@ -105,8 +105,8 @@ services:
 
   delivery:
     build:
-      context: ./services/delivery
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/delivery/Dockerfile
     environment:
       PORT: 3004
       MONGODB_URI: mongodb://mongo:27017/bitez_delivery
@@ -123,8 +123,8 @@ services:
 
   notification:
     build:
-      context: ./services/notification
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/notification/Dockerfile
     environment:
       PORT: 3005
       MONGODB_URI: mongodb://mongo:27017/bitez_notification
@@ -137,8 +137,8 @@ services:
 
   dashboard:
     build:
-      context: ./services/dashboard
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/dashboard/Dockerfile
     environment:
       PORT: 3006
       MONGODB_URI: mongodb://mongo:27017/bitez_dashboard
@@ -147,6 +147,23 @@ services:
     depends_on:
       mongo: { condition: service_started }
       rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  prometheus:
+    profiles: ["metrics"]
+    image: prom/prometheus:v2.55.0
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - auth
+      - restaurant
+      - order
+      - delivery
+      - notification
+      - dashboard
     restart: unless-stopped
 
 volumes:

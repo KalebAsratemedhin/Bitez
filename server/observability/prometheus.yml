@@ -2,14 +2,20 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  # Add your services here once /metrics endpoints exist.
-  # For now this provides a working Prometheus + Grafana baseline.
   - job_name: prometheus
     static_configs:
-      - targets: ["prometheus:9090"]
+      - targets: ["localhost:9090"]
 
-  # RabbitMQ management exposes metrics via a plugin; if you enable it later,
-  # add a scrape job here (or use rabbitmq_exporter).
-
-  # MongoDB exporter can be added later similarly.
-
+  # Bitez Node services expose GET /metrics (prom-client defaults).
+  # Use with the main stack: `docker compose --profile metrics up -d` from `server/`
+  # so Prometheus joins the same network as auth, order, etc.
+  - job_name: bitez-services
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - auth:3001
+          - restaurant:3002
+          - order:3003
+          - delivery:3004
+          - notification:3005
+          - dashboard:3006

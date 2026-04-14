@@ -1,41 +1,47 @@
-import amqp from "amqplib";
+import type { Channel, ConsumeMessage } from "amqplib";
 import type { Logger } from "../../logger.js";
 import type { IDeliveredToRepository } from "@domain/interfaces/DeliveredToRepository.ts";
+import { runAmqpConsumerLoop } from "@bitez/shared";
 
 const EXCHANGE = "bitez";
 const EXCHANGE_TYPE = "topic";
 const QUEUE = "restaurant.delivery.delivered";
 const ROUTING_KEY = "delivery.delivered";
 
-export async function startDeliveryDeliveredConsumer(
+export function startDeliveryDeliveredConsumer(
   url: string,
   deliveredToRepository: IDeliveredToRepository,
-  logger: Logger
+  logger: Logger,
+  options?: { signal?: AbortSignal },
 ): Promise<void> {
   const log = logger.child({ event: ROUTING_KEY, queue: QUEUE });
-  const connection = await amqp.connect(url);
-  const channel = await connection.createChannel();
+  return runAmqpConsumerLoop(
+    url,
+    logger,
+    "restaurant-delivery-delivered",
+    async (channel: Channel) => {
+      await channel.assertExchange(EXCHANGE, EXCHANGE_TYPE, { durable: true });
+      await channel.assertQueue(QUEUE, { durable: true });
+      await channel.bindQueue(QUEUE, EXCHANGE, ROUTING_KEY);
+      channel.prefetch(1);
 
-  await channel.assertExchange(EXCHANGE, EXCHANGE_TYPE, { durable: true });
-  await channel.assertQueue(QUEUE, { durable: true });
-  await channel.bindQueue(QUEUE, EXCHANGE, ROUTING_KEY);
-  channel.prefetch(1);
-
-  // Idempotent: record() upserts by (deliveryPersonId, customerUserId).
-  await channel.consume(QUEUE, async (msg: amqp.ConsumeMessage | null) => {
-    if (!msg) return;
-    try {
-      const p = JSON.parse(msg.content.toString()) as Record<string, unknown>;
-      const deliveryPersonId = String(p.deliveryPersonId ?? "");
-      const customerId = String(p.customerId ?? "");
-      if (deliveryPersonId && customerId) {
-        await deliveredToRepository.record(deliveryPersonId, customerId);
-        log.info({ deliveryPersonId, customerId }, "delivery.delivered recorded");
-      }
-      channel.ack(msg);
-    } catch (err) {
-      log.error({ err }, "delivery.delivered consumer error");
-      channel.nack(msg, false, true);
-    }
-  });
+      await channel.consume(QUEUE, async (msg: ConsumeMessage | null) => {
+        if (!msg) return;
+        try {
+          const p = JSON.parse(msg.content.toString()) as Record<string, unknown>;
+          const deliveryPersonId = String(p.deliveryPersonId ?? "");
+          const customerId = String(p.customerId ?? "");
+          if (deliveryPersonId && customerId) {
+            await deliveredToRepository.record(deliveryPersonId, customerId);
+            log.info({ deliveryPersonId, customerId }, "delivery.delivered recorded");
+          }
+          channel.ack(msg);
+        } catch (err) {
+          log.error({ err }, "delivery.delivered consumer error");
+          channel.nack(msg, false, true);
+        }
+      });
+    },
+    options,
+  );
 }

@@ -4,7 +4,7 @@ import type { RatingRepository } from "../repositories/RatingRepository.js";
 import type { MenuRepository } from "../repositories/MenuRepository.js";
 import type { CloudinaryService } from "../services/CloudinaryService.js";
 import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
-import { AppError } from "../http/errors.js";
+import { AppError } from "@bitez/shared";
 
 function getUserId(req: AuthenticatedRequest): string {
   return req.user!.id;
@@ -65,6 +65,11 @@ export class RestaurantController {
       : 0;
   }
 
+  private async getAverageRatingsForRestaurants(restaurantIds: string[]): Promise<Map<string, number>> {
+    if (!this.ratingRepository || restaurantIds.length === 0) return new Map();
+    return this.ratingRepository.getAverageRatingsMap(ENTITY_TYPE_RESTAURANT, restaurantIds);
+  }
+
   getMine = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const page = Math.max(1, Number(req.query.page) || 1);
@@ -74,13 +79,13 @@ export class RestaurantController {
         page,
         limit,
       });
-      const data = await Promise.all(
-        result.restaurants.map(async (r) => {
-          const id = String((r as { _id?: unknown })._id ?? "");
-          const rating = await this.getAverageRatingForRestaurant(id);
-          return toRestaurantResponse(r, rating);
-        })
-      );
+      const ids = result.restaurants.map((r) => String((r as { _id?: unknown })._id ?? ""));
+      const ratingMap = await this.getAverageRatingsForRestaurants(ids);
+      const data = result.restaurants.map((r) => {
+        const id = String((r as { _id?: unknown })._id ?? "");
+        const rating = ratingMap.get(id) ?? 0;
+        return toRestaurantResponse(r, rating);
+      });
       res.json({
         message: "OK",
         data,
@@ -229,13 +234,13 @@ export class RestaurantController {
       const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
       const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
       const result = await this.restaurantUseCase.getActive({ page, limit, search });
-      const data = await Promise.all(
-        result.restaurants.map(async (r) => {
-          const id = String((r as { _id?: unknown })._id ?? "");
-          const rating = await this.getAverageRatingForRestaurant(id);
-          return toRestaurantResponse(r, rating);
-        })
-      );
+      const ids = result.restaurants.map((r) => String((r as { _id?: unknown })._id ?? ""));
+      const ratingMap = await this.getAverageRatingsForRestaurants(ids);
+      const data = result.restaurants.map((r) => {
+        const id = String((r as { _id?: unknown })._id ?? "");
+        const rating = ratingMap.get(id) ?? 0;
+        return toRestaurantResponse(r, rating);
+      });
       res.json({
         message: "OK",
         data,
@@ -266,17 +271,13 @@ export class RestaurantController {
   getTopRestaurants = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await this.restaurantUseCase.getTopRestaurants(50);
-      const withRatings = await Promise.all(
-        result.restaurants.map(async (r) => {
-          const rid = String((r as { _id?: unknown })._id ?? "");
-          let rating = 0;
-          try {
-            rating = await this.getAverageRatingForRestaurant(rid);
-          } catch {
-          }
-          return { r, rid, rating };
-        })
-      );
+      const topIds = result.restaurants.map((r) => String((r as { _id?: unknown })._id ?? ""));
+      const ratingMap = await this.getAverageRatingsForRestaurants(topIds);
+      const withRatings = result.restaurants.map((r) => {
+        const rid = String((r as { _id?: unknown })._id ?? "");
+        const rating = ratingMap.get(rid) ?? 0;
+        return { r, rid, rating };
+      });
       withRatings.sort((a, b) => b.rating - a.rating);
       const top = withRatings.slice(0, 10);
       const data = top.map(({ r, rating }) => toRestaurantResponse(r, rating));

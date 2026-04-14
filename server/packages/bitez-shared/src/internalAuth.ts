@@ -1,10 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
-import { AppError } from "../../http/errors.js";
+import { AppError } from "./errors.js";
 
-/**
- * Server-to-server routes must send header X-Internal-Token matching INTERNAL_SERVICE_TOKEN.
- * In production, INTERNAL_SERVICE_TOKEN must be set. In development, if unset, checks are skipped.
- */
 export function requireInternalServiceToken(
   req: Request,
   _res: Response,

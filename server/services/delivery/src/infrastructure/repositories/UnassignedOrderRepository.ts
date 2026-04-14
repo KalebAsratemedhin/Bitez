@@ -43,6 +43,32 @@ export class UnassignedOrderRepository implements IUnassignedOrderRepository {
         };
     }
 
+    async claimOldest(): Promise<UnassignedOrderRecord | null> {
+        const doc = await UnassignedOrder.findOneAndDelete(
+            {},
+            { sort: { createdAt: 1 } },
+        )
+            .lean()
+            .exec();
+        if (!doc) return null;
+        const d = doc as {
+            orderId: string;
+            customerId?: string;
+            restaurantId?: string;
+            estimatedDeliveryTime: Date;
+            deliveryAddress?: string;
+            coordinates?: { lat?: number; lng?: number };
+        };
+        return {
+            orderId: d.orderId,
+            customerId: d.customerId,
+            restaurantId: d.restaurantId,
+            estimatedDeliveryTime: d.estimatedDeliveryTime,
+            deliveryAddress: d.deliveryAddress,
+            coordinates: d.coordinates,
+        };
+    }
+
     async removeByOrderId(orderId: string): Promise<void> {
         await UnassignedOrder.deleteOne({ orderId });
     }

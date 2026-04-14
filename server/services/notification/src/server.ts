@@ -3,8 +3,7 @@ import express from "express";
 import morgan from "morgan";
 import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
-import { requestContextMiddleware } from "./infrastructure/http/requestContext.js";
-import { createErrorHandler } from "./infrastructure/http/errorHandler.js";
+import { requestContextMiddleware, createErrorHandler, mountMetricsRoute } from "@bitez/shared";
 import { NotificationRepository } from "./infrastructure/repositories/NotificationRepository.js";
 import { NotificationUseCase } from "./application/usecases/NotificationUseCase.js";
 import { NotificationController } from "./infrastructure/controllers/NotificationController.js";
@@ -24,9 +23,14 @@ const PORT = Number(process.env.PORT) || 3005;
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: SERVICE_NAME });
 });
+mountMetricsRoute(app);
 
 async function start() {
   await connectDB();
+
+  const amqpShutdown = new AbortController();
+  process.once("SIGTERM", () => amqpShutdown.abort());
+  process.once("SIGINT", () => amqpShutdown.abort());
 
   const notificationRepository = new NotificationRepository();
   const notificationUseCase = new NotificationUseCase({ notificationRepository });
@@ -38,9 +42,9 @@ async function start() {
   logger.info({ port: PORT }, "Notification service started");
 
   const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
-  startNotificationRequestedConsumer(rabbitUrl, notificationUseCase, logger).catch((err) =>
-    logger.error({ err }, "notification requested consumer failed")
-  );
+  startNotificationRequestedConsumer(rabbitUrl, notificationUseCase, logger, {
+    signal: amqpShutdown.signal,
+  }).catch((err) => logger.error({ err }, "notification requested consumer failed"));
 }
 
 start().catch(() => process.exit(1));

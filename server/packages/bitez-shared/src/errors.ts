@@ -51,4 +51,3 @@ export function asAppError(err: unknown): AppError {
     details: { thrown: err },
   });
 }
-

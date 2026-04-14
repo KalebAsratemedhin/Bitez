@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import type { Logger } from "../../logger.js";
+import type { Logger } from "pino";
 import { asAppError } from "./errors.js";
 import type { ContextRequest } from "./requestContext.js";
 
@@ -45,4 +45,3 @@ export function createErrorHandler(logger: Logger) {
     });
   };
 }
-
