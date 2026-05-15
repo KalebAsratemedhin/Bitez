@@ -1,0 +1,108 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+env:
+  IMAGE_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_USERNAME }}
+
+jobs:
+  build-and-push:
+    name: Build ${{ matrix.image.name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: gateway
+            context: server/gateway
+            dockerfile: server/gateway/Dockerfile
+          - name: auth
+            context: server
+            dockerfile: server/services/auth/Dockerfile
+          - name: restaurant
+            context: server
+            dockerfile: server/services/restaurant/Dockerfile
+          - name: order
+            context: server
+            dockerfile: server/services/order/Dockerfile
+          - name: delivery
+            context: server
+            dockerfile: server/services/delivery/Dockerfile
+          - name: notification
+            context: server
+            dockerfile: server/services/notification/Dockerfile
+          - name: dashboard
+            context: server
+            dockerfile: server/services/dashboard/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Compute image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAMESPACE }}/bitez-${{ matrix.image.name }}
+          tags: |
+            type=sha,format=long
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.dockerfile }}
+          push: true
+          provenance: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,scope=${{ matrix.image.name }},mode=max
+
+  deploy:
+    name: Deploy ${{ matrix.service.name }} to Render
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - { name: gateway,      hook: RENDER_DEPLOY_HOOK_GATEWAY }
+          - { name: auth,         hook: RENDER_DEPLOY_HOOK_AUTH }
+          - { name: restaurant,   hook: RENDER_DEPLOY_HOOK_RESTAURANT }
+          - { name: order,        hook: RENDER_DEPLOY_HOOK_ORDER }
+          - { name: delivery,     hook: RENDER_DEPLOY_HOOK_DELIVERY }
+          - { name: notification, hook: RENDER_DEPLOY_HOOK_NOTIFICATION }
+          - { name: dashboard,    hook: RENDER_DEPLOY_HOOK_DASHBOARD }
+    steps:
+      - name: Trigger Render deploy hook
+        env:
+          HOOK_URL: ${{ secrets[matrix.service.hook] }}
+        run: |
+          if [ -z "$HOOK_URL" ]; then
+            echo "::warning::Secret ${{ matrix.service.hook }} is empty; skipping ${{ matrix.service.name }}."
+            exit 0
+          fi
+          curl --fail --silent --show-error -X POST "$HOOK_URL" -o /tmp/render.json
+          echo "Triggered Render deploy for ${{ matrix.service.name }}:"
+          cat /tmp/render.json || true
+          echo
