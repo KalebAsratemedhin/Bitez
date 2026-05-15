@@ -50,7 +50,7 @@ const baseQueryWithNormalizedErrors: BaseQueryFn<
       typeof prev === "object" && prev !== null && !Array.isArray(prev)
         ? { ...(prev as Record<string, unknown>), message, requestId, code }
         : { message, requestId, code, raw: prev };
-    return { error: { ...result.error, data: merged } };
+    return { error: { ...result.error, data: merged } as FetchBaseQueryError };
   }
   return result;
 };
