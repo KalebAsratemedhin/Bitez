@@ -1,5 +1,5 @@
-import { CreateRestaurantInput } from "@application/dto/restaurant.dto.ts";
-import type { Restaurant, PaginatedRestaurants } from "../entities/Restaurant.ts";
+import { CreateRestaurantInput } from "@application/dto/restaurant.dto.js";
+import type { Restaurant, PaginatedRestaurants } from "../entities/Restaurant.js";
 
 export interface IRestaurantRepository {
   create(data: CreateRestaurantInput): Promise<Restaurant>;

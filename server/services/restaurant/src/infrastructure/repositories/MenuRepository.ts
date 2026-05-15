@@ -1,4 +1,4 @@
-import Menu from "../persistence/models/Menu.ts";
+import Menu from "../persistence/models/Menu.js";
 import mongoose from "mongoose";
 import type {
   IMenuRepository,
@@ -6,8 +6,8 @@ import type {
   CreateMenuData,
   UpdateMenuData,
   MenuItemWithRestaurant,
-} from "@domain/interfaces/MenuRepository.ts";
-import type { Menu as MenuEntity, MenuItem } from "@domain/entities/Menu.ts";
+} from "@domain/interfaces/MenuRepository.js";
+import type { Menu as MenuEntity, MenuItem } from "@domain/entities/Menu.js";
 
 function toMenuItem(item: Record<string, unknown>): MenuItem {
   return {

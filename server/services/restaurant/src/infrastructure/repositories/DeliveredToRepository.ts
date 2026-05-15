@@ -1,4 +1,4 @@
-import type { IDeliveredToRepository } from "@domain/interfaces/DeliveredToRepository.ts";
+import type { IDeliveredToRepository } from "@domain/interfaces/DeliveredToRepository.js";
 import DeliveredTo from "../persistence/models/deliveredTo.js";
 
 export class DeliveredToRepository implements IDeliveredToRepository {

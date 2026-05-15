@@ -1,7 +1,7 @@
 import type { IRestaurantRepository } from "../../domain/interfaces/index.js";
-import type { Restaurant as RestaurantEntity, PaginatedRestaurants, RestaurantOwner } from "@domain/entities/Restaurant.ts";
+import type { Restaurant as RestaurantEntity, PaginatedRestaurants, RestaurantOwner } from "@domain/entities/Restaurant.js";
 import type { CreateRestaurantInput, UpdateRestaurantInput } from "@application/dto/restaurant.dto.js";
-import Restaurant from "../persistence/models/Restaurant.ts";
+import Restaurant from "../persistence/models/Restaurant.js";
 
 function toRestaurant(doc: Record<string, unknown>): RestaurantEntity {
   const owner = doc.ownerId as RestaurantOwner | string;
