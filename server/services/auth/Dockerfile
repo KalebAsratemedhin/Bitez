@@ -3,7 +3,7 @@ WORKDIR /app
 
 COPY packages/bitez-shared/package*.json packages/bitez-shared/
 COPY packages/bitez-shared/tsconfig.json packages/bitez-shared/
-COPY packages/bitez-shared/src packages/bitez-shared/
+COPY packages/bitez-shared/src packages/bitez-shared/src
 RUN cd packages/bitez-shared && npm ci && npm run build
 
 WORKDIR /app/services/auth
