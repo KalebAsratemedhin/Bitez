@@ -3,6 +3,7 @@
 export interface InternalUserResponse {
   _id: string;
   name: string;
+  email?: string;
   phoneNumber?: string;
 }
 

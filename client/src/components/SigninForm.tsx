@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useSigninMutation } from "@/redux/api/authApi";
 import Snackbar from "./Snackbar";
 import LoadingSpinner from "./LoadingSpinner";
-
+import { getRtkErrorMessage } from "@/utils/apiError";
 
 const signinSchema = yup.object().shape({
   email: yup.string().email("Invalid email").required("Email is required"),
@@ -26,7 +26,7 @@ const SigninForm: React.FC = () => {
   } = useForm<SigninFormValues>({
     resolver: yupResolver(signinSchema),
   });
-  const [signin, { isError, isLoading, error, isSuccess }] = useSigninMutation();
+  const [signin, { isLoading, isSuccess }] = useSigninMutation();
   const [snackbar, setSnackbar] = useState<{
     message: string;
     type: "success" | "error";
@@ -42,26 +42,19 @@ const SigninForm: React.FC = () => {
         localStorage.setItem("user", JSON.stringify(user));
       }
     } catch (err) {
-      const msg =
-        err && typeof err === "object" && "data" in err
-          ? (err as { data?: { error?: string } }).data?.error
-          : "Error signing in";
-      setSnackbar({ message: msg || "Error signing in", type: "error" });
+      setSnackbar({
+        message: getRtkErrorMessage(err, "Error signing in"),
+        type: "error",
+      });
     }
   };
 
   useEffect(() => {
-    if (isError) {
-      setSnackbar({
-        message: (error as { data?: { error?: string } })?.data?.error ?? "Error signing in",
-        type: "error",
-      });
-    }
     if (isSuccess) {
       setSnackbar({ message: "Signed in", type: "success" });
       window.location.href = `/dashboard`;
     }
-  }, [isError, isSuccess, error]);
+  }, [isSuccess]);
 
   return (
     <div className="w-full max-w-md mx-auto rounded-2xl border border-stone-200 bg-white p-6 sm:p-8">

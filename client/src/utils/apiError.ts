@@ -35,3 +35,13 @@ export function normalizeApiErrorBody(data: unknown): {
   }
   return { message: "Request failed" };
 }
+
+/** Safe string for toasts/snackbars from an RTK Query `unwrap()` rejection. */
+export function getRtkErrorMessage(err: unknown, fallback = "Request failed"): string {
+  if (err && typeof err === "object" && "data" in err) {
+    const { message } = normalizeApiErrorBody((err as { data: unknown }).data);
+    return message || fallback;
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
+}

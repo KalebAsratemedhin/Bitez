@@ -16,24 +16,25 @@ export function createErrorHandler(logger: Logger) {
   ): void {
     const appErr = asAppError(err);
     const requestId = getRequestId(req);
-
-    logger.error(
-      {
-        requestId,
-        err,
-        appError: {
-          code: appErr.code,
-          status: appErr.status,
-          expose: appErr.expose,
-          details: appErr.details,
-        },
-        http: {
-          method: req.method,
-          path: req.path,
-        },
+    const http = { method: req.method, path: req.path };
+    const payload = {
+      requestId,
+      err,
+      appError: {
+        code: appErr.code,
+        status: appErr.status,
+        expose: appErr.expose,
+        details: appErr.details,
       },
-      "request failed",
-    );
+      http,
+    };
+
+    // Expected client mistakes → warn; unexpected failures → error (+ stack via err).
+    if (appErr.status >= 500 || !appErr.expose) {
+      logger.error(payload, "request failed");
+    } else {
+      logger.warn(payload, "request rejected");
+    }
 
     const message = appErr.expose ? appErr.message : "Internal server error";
     res.status(appErr.status).json({

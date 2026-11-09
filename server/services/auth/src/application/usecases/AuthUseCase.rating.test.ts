@@ -24,7 +24,6 @@ describe("AuthUseCase.getCurrentUser delivery rating", () => {
       deliveryPersonRepository,
       tokenService: { sign: vi.fn(), verify: vi.fn() } as never,
       blacklistedTokenRepository: { add: vi.fn(), exists: vi.fn() } as never,
-      eventPublisher: { publish: vi.fn() } as never,
     });
 
     const result = (await useCase.getCurrentUser({ userId: "u1" })) as {

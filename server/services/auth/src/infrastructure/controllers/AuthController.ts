@@ -22,12 +22,7 @@ export class AuthController {
       const result = await this.authUseCase.signup(body);
       res.status(201).json(result);
     } catch (e) {
-      if (e instanceof AppError) {
-        next(e);
-        return;
-      }
-      const message = (e as Error).message ?? "Invalid request";
-      next(new AppError({ code: "BAD_REQUEST", status: 400, message, expose: true, cause: e }));
+      next(e);
     }
   };
 
@@ -37,12 +32,7 @@ export class AuthController {
       const result = await this.authUseCase.signin(body);
       res.json(result);
     } catch (e) {
-      if (e instanceof AppError) {
-        next(e);
-        return;
-      }
-      const message = (e as Error).message ?? "Invalid credentials";
-      next(new AppError({ code: "UNAUTHORIZED", status: 401, message, expose: true, cause: e }));
+      next(e);
     }
   };
 
@@ -57,8 +47,7 @@ export class AuthController {
       const result = await this.authUseCase.logout({ token });
       res.json(result);
     } catch (e) {
-      const message = (e as Error).message ?? "Invalid request";
-      next(new AppError({ code: "BAD_REQUEST", status: 400, message, expose: true, cause: e }));
+      next(e);
     }
   };
 
@@ -67,8 +56,7 @@ export class AuthController {
       const user = await this.authUseCase.getCurrentUser({ userId: req.user!.id });
       res.status(200).json(user);
     } catch (e) {
-      const message = (e as Error).message ?? "Invalid request";
-      next(new AppError({ code: "BAD_REQUEST", status: 400, message, expose: true, cause: e }));
+      next(e);
     }
   };
 
@@ -109,20 +97,7 @@ export class AuthController {
       const user = await this.authUseCase.updateProfile(userId, body);
       res.status(200).json(user);
     } catch (e) {
-      if (e instanceof AppError) {
-        next(e);
-        return;
-      }
-      const message = (e as Error).message;
-      if (message === "User not found") {
-        next(new AppError({ code: "NOT_FOUND", status: 404, message, expose: true, cause: e }));
-        return;
-      }
-      if (message === "Email already in use") {
-        next(new AppError({ code: "CONFLICT", status: 409, message, expose: true, cause: e }));
-        return;
-      }
-      next(new AppError({ code: "BAD_REQUEST", status: 400, message: message ?? "Invalid request", expose: true, cause: e }));
+      next(e);
     }
   };
 }

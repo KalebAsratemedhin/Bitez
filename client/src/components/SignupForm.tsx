@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
@@ -11,17 +11,27 @@ import { useSignupMutation } from "@/redux/api/authApi";
 import Snackbar from "./Snackbar";
 import LoadingSpinner from "./LoadingSpinner";
 import { cn } from "@/lib/utils";
+import { getRtkErrorMessage } from "@/utils/apiError";
 
+/** Same Ethiopian phone rule as Settings / Profile. Longest form: +2519xxxxxxxx (13). */
+const ETHIOPIAN_PHONE_REGEX =
+  /^(?:(?:\+251|251|0)?9\d{8}|(?:\+251|251|0)?1[1-9]\d{6})$/;
+const PHONE_MAX_LENGTH = 13;
+
+function sanitizePhoneInput(value: string): string {
+  const hasPlus = value.startsWith("+");
+  const digits = value.replace(/\D/g, "");
+  return (hasPlus ? "+" : "") + digits;
+}
 
 const signupSchema = yup.object().shape({
-  name: yup.string().required("Name is required"),
+  name: yup.string().trim().required("Name is required"),
   email: yup.string().email("Invalid email").required("Email is required"),
   phoneNumber: yup
     .string()
-    .matches(/^\d+$/, "Phone must be digits only")
-    .min(10, "Phone must be at least 10 digits")
-    .required("Phone is required"),
-  address: yup.string().required("Address is required"),
+    .required("Phone is required")
+    .matches(ETHIOPIAN_PHONE_REGEX, "Enter a valid Ethiopian phone number"),
+  address: yup.string().trim().required("Address is required"),
   password: yup
     .string()
     .min(6, "Password must be at least 6 characters")
@@ -64,7 +74,7 @@ const SignupForm: React.FC = () => {
   });
 
   const router = useRouter();
-  const [signup, { isError, isLoading }] = useSignupMutation();
+  const [signup, { isLoading }] = useSignupMutation();
   const [snackbar, setSnackbar] = useState<{
     message: string;
     type: "success" | "error";
@@ -83,22 +93,12 @@ const SignupForm: React.FC = () => {
         setSnackbar({ message: "Invalid response from server", type: "error" });
       }
     } catch (err: unknown) {
-      const rtq = err as { status?: number; data?: unknown };
-      const msg =
-        err && typeof err === "object" && "data" in err
-          ? (err as { data?: { error?: string } }).data?.error
-          : err instanceof Error
-            ? err.message
-            : "Error signing up";
-      setSnackbar({ message: msg || "Error signing up", type: "error" });
+      setSnackbar({
+        message: getRtkErrorMessage(err, "Error signing up"),
+        type: "error",
+      });
     }
   };
-
-  useEffect(() => {
-    if (isError) {
-      setSnackbar({ message: "Error signing up", type: "error" });
-    }
-  }, [isError]);
 
   return (
     <div className="w-full max-w-md mx-auto rounded-2xl border border-stone-200 bg-white p-6 sm:p-8">
@@ -128,8 +128,13 @@ const SignupForm: React.FC = () => {
         <InputField
           label="Phone number"
           name="phoneNumber"
+          type="tel"
           register={register}
           error={errors.phoneNumber?.message}
+          placeholder="09xxxxxxxx or +2519xxxxxxxx"
+          inputMode="tel"
+          maxLength={PHONE_MAX_LENGTH}
+          filterValue={sanitizePhoneInput}
           compact
         />
         <InputField

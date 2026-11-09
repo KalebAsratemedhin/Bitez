@@ -27,9 +27,7 @@ import { TokenService } from "./infrastructure/services/TokenService.js";
 import { ChapaPaymentGateway } from "./infrastructure/services/ChapaPaymentGateway.js";
 import { startDeliveryCreatedConsumer } from "./infrastructure/messaging/deliveryCreatedConsumer.js";
 import { startRestaurantEventConsumer } from "./infrastructure/messaging/restaurantEventConsumer.js";
-import { startUserRegisteredConsumer } from "./infrastructure/messaging/userRegisteredConsumer.js";
 import { RestaurantReadModelRepository } from "./infrastructure/repositories/RestaurantReadModelRepository.js";
-import { UserReadModelRepository } from "./infrastructure/repositories/UserReadModelRepository.js";
 import { DeliveryRepository } from "./delivery/infrastructure/repositories/DeliveryRepository.js";
 import { DeliveryPersonRepository } from "./delivery/infrastructure/repositories/DeliveryPersonRepository.js";
 import { UnassignedOrderRepository } from "./delivery/infrastructure/repositories/UnassignedOrderRepository.js";
@@ -82,7 +80,6 @@ async function start() {
     process.env.RESTAURANT_SERVICE_URL || "http://restaurant:3002",
   );
   const restaurantReadModelRepository = new RestaurantReadModelRepository();
-  const userReadModelRepository = new UserReadModelRepository();
   const eventPublisher = new RabbitMQEventPublisher(resolveRabbitMqUrl());
   const notificationService = new EventNotificationService(eventPublisher);
   const userRepository = new HttpUserRepository(
@@ -92,12 +89,16 @@ async function start() {
   const tokenService = new TokenService(resolveJwtSecret());
   const paymentGateway = new ChapaPaymentGateway(process.env.CHAPA_AUTH || "");
   const getCustomerById = async (id: string) => {
-    const fromReadModel = await userReadModelRepository.findById(id);
-    if (!fromReadModel) return null;
+    const user = (await userRepository.findById(id)) as {
+      _id?: unknown;
+      name?: string;
+      phoneNumber?: string;
+    } | null;
+    if (!user) return null;
     return {
-      _id: fromReadModel.userId,
-      name: fromReadModel.name,
-      phoneNumber: fromReadModel.phoneNumber,
+      _id: String(user._id ?? id),
+      name: String(user.name ?? ""),
+      phoneNumber: user.phoneNumber != null ? String(user.phoneNumber) : undefined,
     };
   };
 
@@ -122,12 +123,16 @@ async function start() {
   const unassignedOrderRepository = new UnassignedOrderRepository();
   const orderReadModelRepository = new OrderReadModelRepository();
   const getUserById = async (userId: string) => {
-    const fromReadModel = await userReadModelRepository.findById(userId);
-    if (!fromReadModel) return null;
+    const user = (await userRepository.findById(userId)) as {
+      _id?: unknown;
+      name?: string;
+      phoneNumber?: string;
+    } | null;
+    if (!user) return null;
     return {
-      _id: fromReadModel.userId,
-      name: fromReadModel.name,
-      phoneNumber: fromReadModel.phoneNumber,
+      _id: String(user._id ?? userId),
+      name: String(user.name ?? ""),
+      phoneNumber: user.phoneNumber != null ? String(user.phoneNumber) : undefined,
     };
   };
   const deliveryUseCase = new DeliveryUseCase({
@@ -158,10 +163,6 @@ async function start() {
   startRestaurantEventConsumer(rabbitUrl, restaurantReadModelRepository, logger, amqpOpts).catch((err) =>
     logger.error({ err }, "restaurant event consumer failed"),
   );
-  startUserRegisteredConsumer(rabbitUrl, userReadModelRepository, logger, {
-    ...amqpOpts,
-    deliveryUseCase,
-  }).catch((err) => logger.error({ err }, "user registered consumer failed"));
   startDeliveryCreatedConsumer(rabbitUrl, orderRepository, notificationService, logger, amqpOpts).catch(
     (err) => logger.error({ err }, "delivery created consumer failed"),
   );

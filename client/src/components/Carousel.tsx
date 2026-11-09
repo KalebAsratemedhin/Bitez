@@ -11,7 +11,7 @@ import Autoplay from "embla-carousel-autoplay"
 
 const slides = [
   {
-    image: `/Delicious Salami Pizza🍕.jpeg`,
+    image: `/delicious-salami-pizza.jpeg`,
     title: 'Delicious Pizza at Your Doorstep',
   },
   {

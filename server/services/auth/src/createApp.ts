@@ -6,7 +6,6 @@ import {
   mountMetricsRoute,
   configureJwtAuth,
   resolveJwtSecret,
-  resolveRabbitMqUrl,
   type Logger,
 } from "@bitez/shared";
 import { AuthUseCase } from "./application/usecases/AuthUseCase.js";
@@ -15,7 +14,6 @@ import { UserRepository } from "./infrastructure/repositories/UserRepository.js"
 import { BlacklistedTokenRepository } from "./infrastructure/repositories/BlacklistedTokenRepository.js";
 import { DeliveryPersonRatingReadModelRepository } from "./infrastructure/repositories/DeliveryPersonRatingReadModelRepository.js";
 import { TokenService } from "./infrastructure/services/TokenService.js";
-import { RabbitMQEventPublisher } from "./infrastructure/messaging/RabbitMQEventPublisher.js";
 import { createAuthRoutes } from "./infrastructure/web/authRoutes.js";
 import type { IDeliveryPersonRepository } from "./domain/interfaces/DeliveryPersonRepository.js";
 
@@ -41,14 +39,12 @@ export function createAuthApp(logger: Logger): AuthApp {
   const userRepository = new UserRepository();
   const deliveryPersonReadModel = new DeliveryPersonRatingReadModelRepository();
   const tokenService = new TokenService(resolveJwtSecret());
-  const eventPublisher = new RabbitMQEventPublisher(resolveRabbitMqUrl());
 
   const authUseCase = new AuthUseCase({
     userRepository,
     deliveryPersonRepository: deliveryPersonReadModel,
     tokenService,
     blacklistedTokenRepository,
-    eventPublisher,
   });
 
   const authController = new AuthController(authUseCase);

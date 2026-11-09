@@ -1,12 +1,11 @@
 import bcrypt from "bcryptjs";
-import { RoutingKeys } from "@bitez/contracts";
+import { AppError, isMongoDuplicateKeyError } from "@bitez/shared";
 
 import type {
   IUserRepository,
   IDeliveryPersonRepository,
   ITokenService,
   IBlacklistedTokenRepository,
-  IEventPublisher,
 } from "../../domain/interfaces/index.js";
 import type {
   SignupInput,
@@ -23,8 +22,12 @@ export interface AuthUseCaseDeps {
   deliveryPersonRepository: IDeliveryPersonRepository;
   tokenService: ITokenService;
   blacklistedTokenRepository: IBlacklistedTokenRepository;
-  eventPublisher: IEventPublisher;
 }
+
+/** Generic client copy — do not confirm which field collided (enumeration). */
+const REGISTRATION_FAILED = "Unable to create account";
+const PROFILE_UPDATE_FAILED = "Unable to update profile";
+const INVALID_CREDENTIALS = "Invalid credentials";
 
 export class AuthUseCase {
   constructor(private readonly deps: AuthUseCaseDeps) {}
@@ -34,25 +37,32 @@ export class AuthUseCase {
     const isActive = role === "customer";
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const user = (await this.deps.userRepository.create({
-      name,
-      email,
-      password: hashedPassword,
-      phoneNumber,
-      address,
-      role,
-      isActive,
-    })) as { _id: unknown; role: string | string[] };
+    let user: { _id: unknown; role: string | string[] };
+    try {
+      user = (await this.deps.userRepository.create({
+        name,
+        email,
+        password: hashedPassword,
+        phoneNumber,
+        address,
+        role,
+        isActive,
+      })) as { _id: unknown; role: string | string[] };
+    } catch (err) {
+      if (isMongoDuplicateKeyError(err)) {
+        throw new AppError({
+          code: "CONFLICT",
+          status: 409,
+          message: REGISTRATION_FAILED,
+          expose: true,
+          details: { reason: "duplicate_key" },
+          cause: err,
+        });
+      }
+      throw err;
+    }
 
     const userId = String(user._id);
-    await this.deps.eventPublisher.publish(RoutingKeys.UserRegistered, {
-      userId,
-      name: name ?? "",
-      email: email ?? "",
-      phoneNumber: phoneNumber ?? "",
-      role: Array.isArray(role) ? role[0] : role,
-    });
-
     const roleVal = Array.isArray(user.role) ? user.role[0] : user.role;
     const token = await this.deps.tokenService.sign({ id: userId, role: roleVal });
 
@@ -61,11 +71,23 @@ export class AuthUseCase {
 
   async signin(input: SigninInput): Promise<SigninResult> {
     const user = await this.deps.userRepository.findByEmail(input.email, { includePassword: true });
-    if (!user) throw new Error("Invalid credential");
+    if (!user) {
+      throw new AppError({
+        code: "UNAUTHORIZED",
+        status: 401,
+        message: INVALID_CREDENTIALS,
+        expose: true,
+      });
+    }
 
     const u = user as { password: string; _id: unknown; role: string };
     if (!(await bcrypt.compare(input.password, u.password))) {
-      throw new Error("Invalid credentials");
+      throw new AppError({
+        code: "UNAUTHORIZED",
+        status: 401,
+        message: INVALID_CREDENTIALS,
+        expose: true,
+      });
     }
 
     const userId = String(u._id);
@@ -84,7 +106,14 @@ export class AuthUseCase {
 
   async getCurrentUser(input: GetCurrentUserInput): Promise<unknown> {
     const user = await this.deps.userRepository.findById(input.userId, { excludePassword: true });
-    if (!user) throw new Error("User not found");
+    if (!user) {
+      throw new AppError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "User not found",
+        expose: true,
+      });
+    }
 
     const u = user as { role?: string | string[]; _id?: unknown };
     const roleVal = Array.isArray(u.role) ? u.role[0] : u.role;
@@ -95,26 +124,47 @@ export class AuthUseCase {
     return user;
   }
 
-  /** Internal: return minimal user fields for enrichment (no auth). */
-  async getInternalUserById(userId: string): Promise<{ _id: string; name: string; phoneNumber?: string } | null> {
+  /** Internal: return minimal user fields for enrichment (service token). */
+  async getInternalUserById(
+    userId: string,
+  ): Promise<{ _id: string; name: string; email?: string; phoneNumber?: string } | null> {
     const user = await this.deps.userRepository.findById(userId, { excludePassword: true });
     if (!user) return null;
-    const u = user as { _id?: unknown; name?: string; phoneNumber?: string };
+    const u = user as { _id?: unknown; name?: string; email?: string; phoneNumber?: string };
     return {
       _id: String(u._id ?? userId),
       name: String(u.name ?? ""),
+      email: u.email != null ? String(u.email) : undefined,
       phoneNumber: u.phoneNumber != null ? String(u.phoneNumber) : undefined,
     };
   }
 
-  async updateProfile(userId: string, data: { name?: string; email?: string; phoneNumber?: string; address?: string }): Promise<unknown> {
+  async updateProfile(
+    userId: string,
+    data: { name?: string; email?: string; phoneNumber?: string; address?: string },
+  ): Promise<unknown> {
     const user = await this.deps.userRepository.findById(userId, { excludePassword: true });
-    if (!user) throw new Error("User not found");
+    if (!user) {
+      throw new AppError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "User not found",
+        expose: true,
+      });
+    }
     if (data.email != null) {
       const existing = await this.deps.userRepository.findByEmail(data.email);
       if (existing) {
         const existingId = String((existing as { _id?: unknown })._id);
-        if (existingId !== userId) throw new Error("Email already in use");
+        if (existingId !== userId) {
+          throw new AppError({
+            code: "CONFLICT",
+            status: 409,
+            message: PROFILE_UPDATE_FAILED,
+            expose: true,
+            details: { reason: "duplicate_key" },
+          });
+        }
       }
     }
     const update: Record<string, unknown> = {};
@@ -123,8 +173,31 @@ export class AuthUseCase {
     if (data.phoneNumber !== undefined) update.phoneNumber = data.phoneNumber;
     if (data.address !== undefined) update.address = data.address;
     if (Object.keys(update).length === 0) return user;
-    const updated = await this.deps.userRepository.findByIdAndUpdate(userId, update);
-    if (!updated) throw new Error("User not found");
-    return updated;
+
+    try {
+      const updated = await this.deps.userRepository.findByIdAndUpdate(userId, update);
+      if (!updated) {
+        throw new AppError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "User not found",
+          expose: true,
+        });
+      }
+      return updated;
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      if (isMongoDuplicateKeyError(err)) {
+        throw new AppError({
+          code: "CONFLICT",
+          status: 409,
+          message: PROFILE_UPDATE_FAILED,
+          expose: true,
+          details: { reason: "duplicate_key" },
+          cause: err,
+        });
+      }
+      throw err;
+    }
   }
 }

@@ -4,7 +4,6 @@ export const BITEZ_EXCHANGE_TYPE = "topic" as const;
 
 /** Canonical routing keys. Prefer these over string literals. */
 export const RoutingKeys = {
-  UserRegistered: "user.registered",
   RestaurantCreated: "restaurant.created",
   RestaurantUpdated: "restaurant.updated",
   OrderCreated: "order.created",
@@ -19,14 +18,6 @@ export const RoutingKeys = {
 } as const;
 
 export type RoutingKey = (typeof RoutingKeys)[keyof typeof RoutingKeys];
-
-export interface UserRegisteredEvent {
-  userId: string;
-  name: string;
-  email: string;
-  phoneNumber: string;
-  role: string;
-}
 
 export interface RestaurantCreatedEvent {
   restaurantId: string;
@@ -112,7 +103,6 @@ export interface NotificationRequestedEvent {
 }
 
 export interface EventPayloadMap {
-  [RoutingKeys.UserRegistered]: UserRegisteredEvent;
   [RoutingKeys.RestaurantCreated]: RestaurantCreatedEvent;
   [RoutingKeys.RestaurantUpdated]: RestaurantUpdatedEvent;
   [RoutingKeys.OrderCreated]: OrderCreatedEvent;

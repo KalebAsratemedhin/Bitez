@@ -51,3 +51,13 @@ export function asAppError(err: unknown): AppError {
     details: { thrown: err },
   });
 }
+
+/** Mongo duplicate-key (E11000) — do not put the driver message in client responses. */
+export function isMongoDuplicateKeyError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: unknown; message?: unknown; cause?: unknown };
+  if (e.code === 11000 || e.code === "11000") return true;
+  if (typeof e.message === "string" && e.message.includes("E11000")) return true;
+  if (e.cause) return isMongoDuplicateKeyError(e.cause);
+  return false;
+}

@@ -272,7 +272,8 @@ export class DeliveryUseCase {
     let person = await this.deps.deliveryPersonRepository.findByUserId(userId);
     if (!person) {
       try {
-        person = await this.deps.deliveryPersonRepository.create({ userId });
+        // Lazy bootstrap on first courier action; publishes delivery_person.registered for auth rating.
+        person = await this.createDeliveryPerson({ userId });
       } catch {
         return { deliveries: [], total: 0 };
       }

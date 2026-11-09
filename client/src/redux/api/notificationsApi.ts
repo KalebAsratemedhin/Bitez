@@ -5,11 +5,11 @@ import { api } from "./index";
 export const notificationsApi = api.injectEndpoints({
   endpoints: (builder) => ({
     getNotifications: builder.query<Notification[], void>({
-      query: () => "/notification",
+      query: () => "/notifications",
     }),
     markNotificationsAsSeen: builder.mutation<Notification, {id: string}>({
       query: ({id}) => ({
-        url: `/notification/mark-as-seen/${id}`,
+        url: `/notifications/mark-as-seen/${id}`,
         method: "PUT",
       }),
       invalidatesTags: ["Notifications"],

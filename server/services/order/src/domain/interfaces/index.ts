@@ -3,7 +3,6 @@ export * from "./RestaurantRepository.js";
 export * from "./RestaurantReadModelRepository.js";
 export * from "./NotificationService.js";
 export * from "./UserRepository.js";
-export * from "./UserReadModelRepository.js";
 export * from "./TokenService.js";
 export * from "./PaymentGateway.js";
 export * from "./EventPublisher.js";

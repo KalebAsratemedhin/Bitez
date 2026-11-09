@@ -38,7 +38,13 @@ export default function AdminDashboard() {
   if (isError || !data) {
     return (
       <div className="rounded-2xl bg-stone-100 p-8 text-center">
-        <p className="text-red-600 font-medium">Failed to load dashboard.</p>
+        <p className="text-stone-700 font-medium">
+          Admin dashboard is unavailable after the API migration.
+        </p>
+        <p className="mt-2 text-sm text-stone-500">
+          No backend route owns this aggregate yet. Ask the backend team to
+          re-expose it on the service that should own admin stats.
+        </p>
       </div>
     );
   }
