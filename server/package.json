@@ -2,13 +2,19 @@
   "name": "bitez-server",
   "private": true,
   "workspaces": [
+    "packages/bitez-contracts",
     "packages/bitez-shared",
     "gateway",
     "services/*"
   ],
   "scripts": {
-    "build:shared": "npm run build -w @bitez/shared",
-    "typecheck": "npm run build:shared && npm run typecheck -w gateway -w auth-service -w restaurant-service -w order-service -w delivery-service -w notification-service -w dashboard-service",
-    "build": "npm run build:shared && npm run build -w gateway -w auth-service -w restaurant-service -w order-service -w delivery-service -w notification-service -w dashboard-service"
+    "build:shared": "npm run build -w @bitez/contracts && npm run build -w @bitez/shared",
+    "typecheck": "npm run build:shared && npm run typecheck -w gateway && npm run typecheck -w auth-service && npm run typecheck -w restaurant-service && npm run typecheck -w order-service",
+    "build": "npm run build:shared && npm run build -w gateway && npm run build -w auth-service && npm run build -w restaurant-service && npm run build -w order-service",
+    "test": "npm run build:shared && vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
   }
 }

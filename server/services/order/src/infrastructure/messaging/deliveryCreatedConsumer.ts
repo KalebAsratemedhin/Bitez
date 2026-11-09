@@ -3,11 +3,12 @@ import type { Logger } from "@bitez/shared";
 import type { IOrderRepository } from "../../domain/interfaces/OrderRepository.js";
 import type { INotificationService } from "../../domain/interfaces/NotificationService.js";
 import { runAmqpConsumerLoop } from "@bitez/shared";
+import { RoutingKeys } from "@bitez/contracts";
 
 const EXCHANGE = "bitez";
 const EXCHANGE_TYPE = "topic";
 const QUEUE = "order.delivery.created";
-const ROUTING_KEY = "delivery.created";
+const ROUTING_KEY = RoutingKeys.DeliveryCreated;
 
 export function startDeliveryCreatedConsumer(
   url: string,

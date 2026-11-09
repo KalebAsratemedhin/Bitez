@@ -9,6 +9,7 @@
     "dev": "tsx watch src/server.ts"
   },
   "dependencies": {
+    "@bitez/contracts": "file:../../packages/bitez-contracts",
     "@bitez/shared": "file:../../packages/bitez-shared",
     "amqplib": "^0.10.4",
     "bcryptjs": "^3.0.2",

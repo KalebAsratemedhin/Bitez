@@ -8,4 +8,5 @@ export interface RestaurantReadModelItem {
 export interface IRestaurantReadModelRepository {
   upsert(item: RestaurantReadModelItem): Promise<void>;
   findById(restaurantId: string): Promise<RestaurantReadModelItem | null>;
+  findByOwnerId(ownerId: string): Promise<RestaurantReadModelItem[]>;
 }

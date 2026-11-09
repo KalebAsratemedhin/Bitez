@@ -2,11 +2,12 @@ import type { Channel, ConsumeMessage } from "amqplib";
 import type { Logger } from "@bitez/shared";
 import type { IDeliveredToRepository } from "../../domain/interfaces/DeliveredToRepository.js";
 import { runAmqpConsumerLoop } from "@bitez/shared";
+import { RoutingKeys } from "@bitez/contracts";
 
 const EXCHANGE = "bitez";
 const EXCHANGE_TYPE = "topic";
 const QUEUE = "restaurant.delivery.delivered";
-const ROUTING_KEY = "delivery.delivered";
+const ROUTING_KEY = RoutingKeys.DeliveryDelivered;
 
 export function startDeliveryDeliveredConsumer(
   url: string,

@@ -1,3 +1,4 @@
+import { RoutingKeys } from "@bitez/contracts";
 import type { IRestaurantRepository, IEventPublisher } from "../../domain/interfaces/index.js";
 import type { Restaurant } from "../../domain/entities/Restaurant.js";
 import type {
@@ -47,7 +48,7 @@ export class RestaurantUseCase {
 
     const created = await this.deps.restaurantRepository.create(input);
 
-    await this.deps.eventPublisher.publish("restaurant.created", {
+    await this.deps.eventPublisher.publish(RoutingKeys.RestaurantCreated, {
       restaurantId: created._id,
       ownerId: ownerIdString(created),
       name: created.name,
@@ -74,7 +75,7 @@ export class RestaurantUseCase {
 
     if (!updated) throw new Error("Restaurant not found");
 
-    await this.deps.eventPublisher.publish("restaurant.updated", {
+    await this.deps.eventPublisher.publish(RoutingKeys.RestaurantUpdated, {
       restaurantId: updated._id,
       ownerId: ownerIdString(updated),
       name: updated.name,

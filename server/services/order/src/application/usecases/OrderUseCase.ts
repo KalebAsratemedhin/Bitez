@@ -1,3 +1,4 @@
+import { RoutingKeys } from "@bitez/contracts";
 import { OrderStatus, orderCanBeCancelled } from "../../domain/entities/Order.js";
 import type {
   IOrderRepository,
@@ -89,6 +90,7 @@ export class OrderUseCase {
         return cached;
       }
     }
+    // Cold cache: one sync lookup. Prefer events warming the read model.
     const restaurant = await this.deps.restaurantRepository.findById(restaurantID);
     if (!restaurant) throw new Error("No restaurant provided.");
     if ((restaurant as { status?: string }).status !== "active") {
@@ -113,7 +115,7 @@ export class OrderUseCase {
 
   private async publishOrderCreated(createdOrder: OrderRecord): Promise<void> {
     const coords = createdOrder.coordinates as { lat?: number; lng?: number } | undefined;
-    await this.deps.eventPublisher.publish("order.created", {
+    await this.deps.eventPublisher.publish(RoutingKeys.OrderCreated, {
       orderId: toRefId(createdOrder._id),
       customerId: toRefId(createdOrder.customerID),
       restaurantId: toRefId(createdOrder.restaurantID),
@@ -152,13 +154,10 @@ export class OrderUseCase {
     const orderRecord = order as OrderRecord;
     const restaurantId = toRefId(orderRecord.restaurantID);
 
-    const restaurant = await this.deps.restaurantRepository.findById(restaurantId);
+    const ownerId = await this.resolveRestaurantOwnerId(restaurantId);
+    if (!ownerId) throw new Error("Order not found");
 
-    if (!restaurant) throw new Error("Order not found");
-
-    const ownerId = toRefId((restaurant as { ownerId?: unknown }).ownerId);
-
-    if (!ownerId || ownerId !== userId) {
+    if (ownerId !== userId) {
       throw new Error("You are not authorized to update this order.");
     }
     if ((orderRecord.status as string) === OrderStatus.CANCELLED) {
@@ -179,7 +178,7 @@ export class OrderUseCase {
     context: { customerId: string; restaurantId: string; totalAmount: number; createdAt: Date },
     status: string,
   ): Promise<void> {
-    await this.deps.eventPublisher.publish("order.updated", {
+    await this.deps.eventPublisher.publish(RoutingKeys.OrderUpdated, {
       orderId,
       customerId: context.customerId,
       restaurantId: context.restaurantId,
@@ -211,7 +210,7 @@ export class OrderUseCase {
 
     const estimatedDeliveryTime = new Date(Date.now() + 30 * 60 * 1000);
 
-    await this.deps.eventPublisher.publish("order.ready_for_delivery", {
+    await this.deps.eventPublisher.publish(RoutingKeys.OrderReadyForDelivery, {
       orderId,
       customerId: context.customerId,
       restaurantId: context.restaurantId,
@@ -339,10 +338,9 @@ export class OrderUseCase {
 
     if (role === "restaurant_owner") {
       const restaurantId = toRefId(orderRecord.restaurantID);
-      const restaurant = await this.deps.restaurantRepository.findById(restaurantId);
-      if (!restaurant) return null;
-      const ownerId = toRefId((restaurant as { ownerId?: unknown }).ownerId);
+      const ownerId = await this.resolveRestaurantOwnerId(restaurantId);
       if (ownerId && ownerId === viewerId) return order;
+      return null;
     }
 
     throw new Error("You are not authorized to view this order.");
@@ -363,10 +361,26 @@ export class OrderUseCase {
     return { ...orderRecord, restaurantID: restaurantSummary, customerID: customerSummary };
   }
 
+  private async resolveRestaurantOwnerId(restaurantId: string): Promise<string> {
+    if (this.deps.restaurantReadModelRepository) {
+      const cached = await this.deps.restaurantReadModelRepository.findById(restaurantId);
+      if (cached?.ownerId) return cached.ownerId;
+    }
+    const restaurant = await this.deps.restaurantRepository.findById(restaurantId);
+    return toRefId((restaurant as { ownerId?: unknown } | null)?.ownerId);
+  }
+
   private async getRestaurantSummary(
     restaurantId: string,
   ): Promise<{ _id: string; name: string }> {
     if (!restaurantId) return { _id: restaurantId, name: "" };
+
+    if (this.deps.restaurantReadModelRepository) {
+      const cached = await this.deps.restaurantReadModelRepository.findById(restaurantId);
+      if (cached) {
+        return { _id: cached.restaurantId || restaurantId, name: cached.name };
+      }
+    }
 
     const restaurant = await this.deps.restaurantRepository.findById(restaurantId);
     const record = restaurant as { _id?: unknown; name?: string } | null;
@@ -381,6 +395,7 @@ export class OrderUseCase {
   ): Promise<{ _id: string; name: string; phoneNumber?: string }> {
     const fallback = { _id: customerId, name: "" };
 
+    // Enrichment is read-model only (no sync auth HTTP).
     if (!customerId || !this.deps.getCustomerById) return fallback;
 
     const customer = await this.deps.getCustomerById(customerId);

@@ -2,6 +2,7 @@ import type { Channel, ConsumeMessage } from "amqplib";
 import type { Logger } from "@bitez/shared";
 import type { IRestaurantReadModelRepository } from "../../domain/interfaces/RestaurantReadModelRepository.js";
 import { runAmqpConsumerLoop } from "@bitez/shared";
+import { RoutingKeys } from "@bitez/contracts";
 
 const EXCHANGE = "bitez";
 const EXCHANGE_TYPE = "topic";
@@ -21,8 +22,8 @@ export function startRestaurantEventConsumer(
     async (channel: Channel) => {
       await channel.assertExchange(EXCHANGE, EXCHANGE_TYPE, { durable: true });
       await channel.assertQueue(QUEUE, { durable: true });
-      await channel.bindQueue(QUEUE, EXCHANGE, "restaurant.created");
-      await channel.bindQueue(QUEUE, EXCHANGE, "restaurant.updated");
+      await channel.bindQueue(QUEUE, EXCHANGE, RoutingKeys.RestaurantCreated);
+      await channel.bindQueue(QUEUE, EXCHANGE, RoutingKeys.RestaurantUpdated);
       channel.prefetch(1);
 
       await channel.consume(QUEUE, async (msg: ConsumeMessage | null) => {

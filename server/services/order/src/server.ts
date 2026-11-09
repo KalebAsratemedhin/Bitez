@@ -16,6 +16,8 @@ import connectDB from "./infrastructure/config/db.js";
 import { OrderRepository } from "./infrastructure/repositories/OrderRepository.js";
 import { OrderUseCase } from "./application/usecases/OrderUseCase.js";
 import { OrderController } from "./infrastructure/controllers/OrderController.js";
+import { DashboardUseCase } from "./application/usecases/DashboardUseCase.js";
+import { DashboardController } from "./infrastructure/controllers/DashboardController.js";
 import { createOrderRoutes } from "./infrastructure/web/orderRoutes.js";
 import { HttpRestaurantRepository } from "./infrastructure/services/HttpRestaurantRepository.js";
 import { EventNotificationService } from "./infrastructure/services/EventNotificationService.js";
@@ -28,7 +30,21 @@ import { startRestaurantEventConsumer } from "./infrastructure/messaging/restaur
 import { startUserRegisteredConsumer } from "./infrastructure/messaging/userRegisteredConsumer.js";
 import { RestaurantReadModelRepository } from "./infrastructure/repositories/RestaurantReadModelRepository.js";
 import { UserReadModelRepository } from "./infrastructure/repositories/UserReadModelRepository.js";
-
+import { DeliveryRepository } from "./delivery/infrastructure/repositories/DeliveryRepository.js";
+import { DeliveryPersonRepository } from "./delivery/infrastructure/repositories/DeliveryPersonRepository.js";
+import { UnassignedOrderRepository } from "./delivery/infrastructure/repositories/UnassignedOrderRepository.js";
+import { OrderReadModelRepository } from "./delivery/infrastructure/repositories/OrderReadModelRepository.js";
+import { DeliveryUseCase } from "./delivery/application/usecases/DeliveryUseCase.js";
+import { DeliveryController } from "./delivery/infrastructure/controllers/DeliveryController.js";
+import { createDeliveryRoutes } from "./delivery/infrastructure/web/deliveryRoutes.js";
+import { startOrderEventConsumer } from "./delivery/infrastructure/messaging/orderEventConsumer.js";
+import { startDeliveryPersonRatingUpdatedConsumer } from "./delivery/infrastructure/messaging/deliveryPersonRatingUpdatedConsumer.js";
+import { startOrderReadyForDeliveryConsumer } from "./delivery/infrastructure/messaging/orderReadyForDeliveryConsumer.js";
+import { NotificationRepository } from "./notifications/infrastructure/repositories/NotificationRepository.js";
+import { NotificationUseCase } from "./notifications/application/usecases/NotificationUseCase.js";
+import { NotificationController } from "./notifications/infrastructure/controllers/NotificationController.js";
+import { createNotificationRoutes } from "./notifications/infrastructure/web/notificationRoutes.js";
+import { startNotificationRequestedConsumer } from "./notifications/infrastructure/messaging/notificationRequestedConsumer.js";
 
 assertProductionSecrets();
 configureJwtAuth({
@@ -67,9 +83,7 @@ async function start() {
   );
   const restaurantReadModelRepository = new RestaurantReadModelRepository();
   const userReadModelRepository = new UserReadModelRepository();
-  const eventPublisher = new RabbitMQEventPublisher(
-    resolveRabbitMqUrl(),
-  );
+  const eventPublisher = new RabbitMQEventPublisher(resolveRabbitMqUrl());
   const notificationService = new EventNotificationService(eventPublisher);
   const userRepository = new HttpUserRepository(
     process.env.AUTH_SERVICE_URL || "http://auth:3001",
@@ -77,22 +91,14 @@ async function start() {
 
   const tokenService = new TokenService(resolveJwtSecret());
   const paymentGateway = new ChapaPaymentGateway(process.env.CHAPA_AUTH || "");
-  const authBase = (process.env.AUTH_SERVICE_URL || "http://auth:3001").replace(/\/$/, "");
   const getCustomerById = async (id: string) => {
     const fromReadModel = await userReadModelRepository.findById(id);
-    if (fromReadModel) {
-      return { _id: fromReadModel.userId, name: fromReadModel.name, phoneNumber: fromReadModel.phoneNumber };
-    }
-    try {
-      const token = process.env.INTERNAL_SERVICE_TOKEN?.trim();
-      const headers: Record<string, string> = {};
-      if (token) headers["X-Internal-Token"] = token;
-      const res = await fetch(`${authBase}/internal/user/${encodeURIComponent(id)}`, { headers });
-      if (!res.ok) return null;
-      return (await res.json()) as { _id: string; name: string; phoneNumber?: string };
-    } catch {
-      return null;
-    }
+    if (!fromReadModel) return null;
+    return {
+      _id: fromReadModel.userId,
+      name: fromReadModel.name,
+      phoneNumber: fromReadModel.phoneNumber,
+    };
   };
 
   const orderUseCase = new OrderUseCase({
@@ -107,23 +113,69 @@ async function start() {
     getCustomerById,
   });
 
+  const dashboardUseCase = new DashboardUseCase(orderRepository, restaurantReadModelRepository);
+  const dashboardController = new DashboardController(dashboardUseCase);
   const orderController = new OrderController(orderUseCase);
-  app.use("/", createOrderRoutes(orderController));
+
+  const deliveryRepository = new DeliveryRepository();
+  const deliveryPersonRepository = new DeliveryPersonRepository();
+  const unassignedOrderRepository = new UnassignedOrderRepository();
+  const orderReadModelRepository = new OrderReadModelRepository();
+  const getUserById = async (userId: string) => {
+    const fromReadModel = await userReadModelRepository.findById(userId);
+    if (!fromReadModel) return null;
+    return {
+      _id: fromReadModel.userId,
+      name: fromReadModel.name,
+      phoneNumber: fromReadModel.phoneNumber,
+    };
+  };
+  const deliveryUseCase = new DeliveryUseCase({
+    deliveryRepository,
+    deliveryPersonRepository,
+    unassignedOrderRepository,
+    orderReadModelRepository,
+    notificationService,
+    eventPublisher,
+    getUserById,
+  });
+  const deliveryController = new DeliveryController(deliveryUseCase);
+
+  const notificationRepository = new NotificationRepository();
+  const notificationUseCase = new NotificationUseCase({ notificationRepository });
+  const notificationController = new NotificationController(notificationUseCase);
+
+  app.use("/", createOrderRoutes(orderController, dashboardController));
+  app.use("/delivery", createDeliveryRoutes(deliveryController));
+  app.use("/notifications", createNotificationRoutes(notificationController));
   app.use(createErrorHandler(logger));
 
   app.listen(PORT, "0.0.0.0");
-  logger.info({ port: PORT }, "Order service started");
+  logger.info({ port: PORT }, "Order service started (includes delivery + notifications)");
 
   const rabbitUrl = resolveRabbitMqUrl();
   const amqpOpts = { signal: amqpShutdown.signal };
   startRestaurantEventConsumer(rabbitUrl, restaurantReadModelRepository, logger, amqpOpts).catch((err) =>
-    logger.error({ err }, "restaurant event consumer failed")
+    logger.error({ err }, "restaurant event consumer failed"),
   );
-  startUserRegisteredConsumer(rabbitUrl, userReadModelRepository, logger, amqpOpts).catch((err) =>
-    logger.error({ err }, "user registered consumer failed")
+  startUserRegisteredConsumer(rabbitUrl, userReadModelRepository, logger, {
+    ...amqpOpts,
+    deliveryUseCase,
+  }).catch((err) => logger.error({ err }, "user registered consumer failed"));
+  startDeliveryCreatedConsumer(rabbitUrl, orderRepository, notificationService, logger, amqpOpts).catch(
+    (err) => logger.error({ err }, "delivery created consumer failed"),
   );
-  startDeliveryCreatedConsumer(rabbitUrl, orderRepository, notificationService, logger, amqpOpts).catch((err) =>
-    logger.error({ err }, "delivery created consumer failed")
+  startOrderEventConsumer(rabbitUrl, orderReadModelRepository, logger, amqpOpts).catch((err) =>
+    logger.error({ err }, "order event consumer (delivery read model) failed"),
+  );
+  startDeliveryPersonRatingUpdatedConsumer(rabbitUrl, deliveryPersonRepository, logger, amqpOpts).catch(
+    (err) => logger.error({ err }, "delivery person rating consumer failed"),
+  );
+  startOrderReadyForDeliveryConsumer(rabbitUrl, deliveryUseCase, logger, amqpOpts).catch((err) =>
+    logger.error({ err }, "order ready for delivery consumer failed"),
+  );
+  startNotificationRequestedConsumer(rabbitUrl, notificationUseCase, logger, amqpOpts).catch((err) =>
+    logger.error({ err }, "notification requested consumer failed"),
   );
 }
 

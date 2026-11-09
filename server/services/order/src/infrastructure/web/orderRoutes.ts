@@ -2,9 +2,14 @@ import express from "express";
 import { isAuthenticated, isAdmin, isRestaurantOwner } from "@bitez/shared";
 import { requireInternalServiceToken } from "@bitez/shared";
 import type { OrderController } from "../controllers/OrderController.js";
+import type { DashboardController } from "../controllers/DashboardController.js";
 
-export function createOrderRoutes(controller: OrderController): express.Router {
+export function createOrderRoutes(
+  controller: OrderController,
+  dashboardController: DashboardController,
+): express.Router {
   const router = express.Router();
+  router.get("/dashboard/customer", isAuthenticated, dashboardController.getCustomerDashboard);
   router.put("/status/:id", isAuthenticated, isRestaurantOwner, controller.updateOrderStatus);
   router.get("/payment-success", controller.paymentSuccess);
   router.put("/cancel/:id", isAuthenticated, controller.cancelOrder);

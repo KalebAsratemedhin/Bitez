@@ -1,3 +1,1 @@
-export interface IEventPublisher {
-  publish(routingKey: string, payload: Record<string, unknown>): Promise<void>;
-}
+export type { ITypedEventPublisher as IEventPublisher } from "@bitez/contracts";

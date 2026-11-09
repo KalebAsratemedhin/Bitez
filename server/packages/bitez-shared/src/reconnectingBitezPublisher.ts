@@ -1,15 +1,25 @@
 import amqp, { type ChannelModel } from "amqplib";
+import {
+  BITEZ_EXCHANGE,
+  BITEZ_EXCHANGE_TYPE,
+  type EventPayloadMap,
+  type ITypedEventPublisher,
+  type RoutingKey,
+} from "@bitez/contracts";
+import { waitUntilRabbitReportsReady } from "./rabbitReady.js";
 
-const EXCHANGE = "bitez";
-const EXCHANGE_TYPE = "topic";
+const EXCHANGE = BITEZ_EXCHANGE;
+const EXCHANGE_TYPE = BITEZ_EXCHANGE_TYPE;
 
 /**
  * Topic publisher on the shared `bitez` exchange with reconnect on connection loss
  * and bounded backoff while RabbitMQ is unavailable.
+ * First connect waits until RabbitMQ's health endpoint reports ready.
  */
-export class ReconnectingBitezEventPublisher {
+export class ReconnectingBitezEventPublisher implements ITypedEventPublisher {
   private channel: amqp.Channel | null = null;
   private connection: ChannelModel | null = null;
+  private readyGate: Promise<void> | null = null;
 
   constructor(private readonly url: string) {}
 
@@ -18,8 +28,16 @@ export class ReconnectingBitezEventPublisher {
     this.connection = null;
   }
 
+  private async ensureReady(): Promise<void> {
+    if (!this.readyGate) {
+      this.readyGate = waitUntilRabbitReportsReady(this.url);
+    }
+    await this.readyGate;
+  }
+
   private async ensureConnected(): Promise<amqp.Channel> {
     if (this.channel) return this.channel;
+    await this.ensureReady();
     let backoffMs = 2000;
     for (;;) {
       try {
@@ -39,7 +57,10 @@ export class ReconnectingBitezEventPublisher {
     }
   }
 
-  async publish(routingKey: string, payload: Record<string, unknown>): Promise<void> {
+  async publish<K extends RoutingKey>(
+    routingKey: K,
+    payload: EventPayloadMap[K],
+  ): Promise<void> {
     const body = Buffer.from(JSON.stringify(payload));
     for (let attempt = 0; attempt < 2; attempt++) {
       const ch = await this.ensureConnected();

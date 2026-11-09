@@ -1,8 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import type { MenuUseCase } from "../../application/usecases/MenuUseCase.js";
 import type { CloudinaryService } from "../services/CloudinaryService.js";
-import type { AuthenticatedRequest } from "@bitez/shared";
-import { AppError } from "@bitez/shared";
+import { AppError, parseBody, type AuthenticatedRequest } from "@bitez/shared";
+import { createMenuBodySchema } from "../../application/validation/restaurant.schemas.js";
 
 function getUserId(req: AuthenticatedRequest): string {
   return typeof req.user?.id === "string" ? req.user.id : "";
@@ -48,23 +48,7 @@ export class MenuController {
         typeof req.params.restaurantId === "string"
           ? req.params.restaurantId
           : (req.params.restaurantId as string[])?.[0] ?? "";
-      const body = req.body as { menuName?: string; menuItems?: string };
-      const menuName = body.menuName?.trim();
-      if (!menuName) {
-        next(new AppError({ code: "BAD_REQUEST", status: 400, message: "Menu name is required", expose: true }));
-        return;
-      }
-      let items: { name: string; description: string; price: number }[];
-      try {
-        items = JSON.parse(body.menuItems || "[]");
-      } catch {
-        next(new AppError({ code: "BAD_REQUEST", status: 400, message: "Invalid menuItems JSON", expose: true }));
-        return;
-      }
-      if (!Array.isArray(items) || items.length === 0) {
-        next(new AppError({ code: "BAD_REQUEST", status: 400, message: "At least one menu item is required", expose: true }));
-        return;
-      }
+      const body = parseBody(createMenuBodySchema, req.body);
       const files = (req as Request & { files?: { buffer?: Buffer; mimetype?: string }[] }).files ?? [];
       const itemPicturePaths: string[] = [];
       if (files.length > 0 && this.cloudinary) {
@@ -86,12 +70,8 @@ export class MenuController {
       const menu = await this.menuUseCase.create({
         restaurantId,
         userId,
-        menuName,
-        menuItems: items.map((item) => ({
-          name: item.name ?? "",
-          description: item.description ?? "",
-          price: Number(item.price) || 0,
-        })),
+        menuName: body.menuName,
+        menuItems: body.menuItems,
         itemPicturePaths,
       });
       const created = menu as { _id?: unknown; menuName?: string; menuItems?: unknown[] };
@@ -105,6 +85,10 @@ export class MenuController {
         },
       });
     } catch (e) {
+      if (e instanceof AppError) {
+        next(e);
+        return;
+      }
       const err = e as Error;
       if (err.message?.includes("Not the owner")) {
         next(new AppError({ code: "FORBIDDEN", status: 403, message: err.message, expose: true, cause: e }));

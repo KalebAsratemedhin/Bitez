@@ -17,6 +17,7 @@ import path from "path";
 import connectDB from "./infrastructure/config/db.js";
 import { RestaurantUseCase } from "./application/usecases/RestaurantUseCase.js";
 import { MenuUseCase } from "./application/usecases/MenuUseCase.js";
+import { RatingUseCase } from "./application/usecases/RatingUseCase.js";
 import { RestaurantController } from "./infrastructure/controllers/RestaurantController.js";
 import { MenuController } from "./infrastructure/controllers/MenuController.js";
 import { RestaurantRepository } from "./infrastructure/repositories/RestaurantRepository.js";
@@ -28,7 +29,11 @@ import { createMenuRoutes } from "./infrastructure/web/menuRoutes.js";
 import { createRatingRoutes } from "./infrastructure/web/ratingRoutes.js";
 import { RabbitMQEventPublisher } from "./infrastructure/messaging/RabbitMQEventPublisher.js";
 import { startDeliveryDeliveredConsumer } from "./infrastructure/messaging/deliveryDeliveredConsumer.js";
+import { startOrderSalesEventConsumer } from "./infrastructure/messaging/orderSalesEventConsumer.js";
+import { RestaurantOwnerDashboardUseCase } from "./application/usecases/RestaurantOwnerDashboardUseCase.js";
 import { CloudinaryService } from "./infrastructure/services/CloudinaryService.js";
+import type { AuthenticatedRequest } from "@bitez/shared";
+import type { Request, Response, NextFunction } from "express";
 
 
 assertProductionSecrets();
@@ -68,6 +73,11 @@ const restaurantUseCase = new RestaurantUseCase({
   eventPublisher,
 });
 const menuUseCase = new MenuUseCase({ menuRepository, restaurantRepository });
+const ratingUseCase = new RatingUseCase({
+  ratingRepository,
+  eventPublisher,
+  deliveredToRepository,
+});
 
 const restaurantController = new RestaurantController(
   restaurantUseCase,
@@ -82,17 +92,19 @@ app.get("/health", (_req, res) => {
 });
 mountMetricsRoute(app);
 
-const deliveryServiceUrl = process.env.DELIVERY_SERVICE_URL || "http://localhost:3004";
-app.use(
-  "/rating",
-  createRatingRoutes(restaurantController, ratingRepository, {
-    deliveryServiceUrl,
-    eventPublisher,
-    deliveredToRepository,
-  }),
-);
+const ownerDashboardUseCase = new RestaurantOwnerDashboardUseCase(restaurantRepository);
+const ownerDashboardHandler = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await ownerDashboardUseCase.get((req as AuthenticatedRequest).user!.id);
+    res.json(result);
+  } catch (e) {
+    next(e);
+  }
+};
+
+app.use("/rating", createRatingRoutes(restaurantController, ratingUseCase));
 app.use("/menu", createMenuRoutes(menuController));
-app.use("/", createRestaurantRoutes(restaurantController));
+app.use("/", createRestaurantRoutes(restaurantController, ownerDashboardHandler));
 
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 app.use(createErrorHandler(logger));
@@ -113,9 +125,13 @@ async function start() {
   }
   app.listen(PORT, "0.0.0.0");
   logger.info({ port: PORT }, "Restaurant service started");
-  startDeliveryDeliveredConsumer(rabbitUrl, deliveredToRepository, logger, {
-    signal: amqpShutdown.signal,
-  }).catch((err) => logger.error({ err }, "delivery delivered consumer failed"));
+  const amqpOpts = { signal: amqpShutdown.signal };
+  startDeliveryDeliveredConsumer(rabbitUrl, deliveredToRepository, logger, amqpOpts).catch((err) =>
+    logger.error({ err }, "delivery delivered consumer failed"),
+  );
+  startOrderSalesEventConsumer(rabbitUrl, logger, amqpOpts).catch((err) =>
+    logger.error({ err }, "order sales consumer failed"),
+  );
 }
 
 start().catch(() => process.exit(1));

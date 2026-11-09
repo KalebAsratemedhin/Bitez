@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { RoutingKeys } from "@bitez/contracts";
 
 import type {
   IUserRepository,
@@ -44,7 +45,7 @@ export class AuthUseCase {
     })) as { _id: unknown; role: string | string[] };
 
     const userId = String(user._id);
-    await this.deps.eventPublisher.publish("user.registered", {
+    await this.deps.eventPublisher.publish(RoutingKeys.UserRegistered, {
       userId,
       name: name ?? "",
       email: email ?? "",
@@ -89,11 +90,7 @@ export class AuthUseCase {
     const roleVal = Array.isArray(u.role) ? u.role[0] : u.role;
     if (roleVal === "delivery_person") {
       const dp = await this.deps.deliveryPersonRepository.findByUserId(input.userId);
-      const d = dp as { rating?: number } | null;
-      const rating = d != null && typeof d === "object" && "rating" in d && typeof d.rating === "number"
-        ? d.rating
-        : 0;
-      return { ...u, role: roleVal, deliveryPersonRating: rating };
+      return { ...u, role: roleVal, deliveryPersonRating: dp?.rating ?? 0 };
     }
     return user;
   }

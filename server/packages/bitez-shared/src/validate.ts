@@ -1,8 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
-import type { ZodType } from "zod";
+import type { ZodTypeAny, output } from "zod";
 import { AppError } from "./errors.js";
 
-export function parseBody<T>(schema: ZodType<T>, body: unknown): T {
+export function parseBody<S extends ZodTypeAny>(schema: S, body: unknown): output<S> {
   const result = schema.safeParse(body);
   if (!result.success) {
     throw new AppError({
@@ -16,7 +16,7 @@ export function parseBody<T>(schema: ZodType<T>, body: unknown): T {
   return result.data;
 }
 
-export function validateBody<T>(schema: ZodType<T>) {
+export function validateBody<S extends ZodTypeAny>(schema: S) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     try {
       req.body = parseBody(schema, req.body);

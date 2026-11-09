@@ -16,7 +16,15 @@ export class RestaurantReadModelRepository implements IRestaurantReadModelReposi
   async findById(restaurantId: string): Promise<RestaurantReadModelItem | null> {
     const doc = await RestaurantReadModel.findOne({ restaurantId }).lean();
     if (!doc) return null;
-    const d = doc as { restaurantId?: string; name?: string; status?: string; ownerId?: string };
+    return this.toItem(doc as Record<string, unknown>);
+  }
+
+  async findByOwnerId(ownerId: string): Promise<RestaurantReadModelItem[]> {
+    const list = await RestaurantReadModel.find({ ownerId }).lean();
+    return list.map((doc) => this.toItem(doc as Record<string, unknown>));
+  }
+
+  private toItem(d: Record<string, unknown>): RestaurantReadModelItem {
     return {
       restaurantId: String(d.restaurantId ?? ""),
       name: String(d.name ?? ""),

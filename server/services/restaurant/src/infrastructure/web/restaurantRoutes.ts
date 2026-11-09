@@ -21,8 +21,14 @@ function maybeUploadLogo(
   } else next();
 }
 
-export function createRestaurantRoutes(controller: RestaurantController): express.Router {
+export function createRestaurantRoutes(
+  controller: RestaurantController,
+  ownerDashboard?: (req: express.Request, res: express.Response, next: express.NextFunction) => void,
+): express.Router {
   const router = express.Router();
+  if (ownerDashboard) {
+    router.get("/dashboard/owner", isAuthenticated, ownerDashboard);
+  }
   router.get("/mine", isAuthenticated, controller.getMine);
   router.post("/", isAuthenticated, maybeUploadLogo, controller.create);
   router.put("/:id", isAuthenticated, maybeUploadLogo, controller.update);

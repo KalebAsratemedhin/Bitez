@@ -3,8 +3,11 @@ import type { RestaurantUseCase } from "../../application/usecases/RestaurantUse
 import type { RatingRepository } from "../repositories/RatingRepository.js";
 import type { MenuRepository } from "../repositories/MenuRepository.js";
 import type { CloudinaryService } from "../services/CloudinaryService.js";
-import type { AuthenticatedRequest } from "@bitez/shared";
-import { AppError } from "@bitez/shared";
+import { AppError, parseBody, type AuthenticatedRequest } from "@bitez/shared";
+import {
+  createRestaurantBodySchema,
+  updateRestaurantBodySchema,
+} from "../../application/validation/restaurant.schemas.js";
 
 function getUserId(req: AuthenticatedRequest): string {
   return req.user!.id;
@@ -101,15 +104,7 @@ export class RestaurantController {
   create = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = getUserId(req);
-      const body = req.body as {
-        name?: string;
-        address?: string;
-        location?: unknown;
-        logo?: string;
-        latitude?: string | number;
-        longitude?: string | number;
-        deliveryAreaRadius?: string | number;
-      };
+      const body = parseBody(createRestaurantBodySchema, req.body);
       const file = (req as Request & { file?: { buffer?: Buffer; mimetype?: string } }).file;
       let logo = body.logo ?? "";
       if (file?.buffer && this.cloudinary) {
@@ -122,23 +117,15 @@ export class RestaurantController {
         } catch {
         }
       }
-      const location =
-        typeof body.location === "string"
-          ? body.location
-          : typeof body.address === "string"
-            ? body.address
-            : undefined;
+      const location = body.location ?? body.address;
       await this.restaurantUseCase.create({
         ownerId: userId,
-        name: body.name ?? "",
+        name: body.name,
         location,
         logo,
-        latitude: body.latitude != null ? Number(body.latitude) : undefined,
-        longitude: body.longitude != null ? Number(body.longitude) : undefined,
-        deliveryAreaRadius:
-          body.deliveryAreaRadius != null
-            ? Number(body.deliveryAreaRadius)
-            : undefined,
+        latitude: body.latitude,
+        longitude: body.longitude,
+        deliveryAreaRadius: body.deliveryAreaRadius,
       });
       res.status(201).json({ message: "Restaurant created successfully" });
     } catch (e) {
@@ -149,14 +136,7 @@ export class RestaurantController {
   update = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = String(req.params.id ?? "").split(",")[0];
-      const body = req.body as {
-        name?: string;
-        address?: string;
-        location?: unknown;
-        latitude?: string | number;
-        longitude?: string | number;
-        deliveryAreaRadius?: string | number;
-      };
+      const body = parseBody(updateRestaurantBodySchema, req.body);
       const file = (req as Request & { file?: { buffer?: Buffer; mimetype?: string } }).file;
       let logo: string | undefined;
       if (file?.buffer && this.cloudinary) {
@@ -174,28 +154,23 @@ export class RestaurantController {
           ? body.location
           : typeof body.address === "string"
             ? body.address
-            : undefined;
+            : body.location;
       await this.restaurantUseCase.update({
         restaurantId: id,
         ownerId: getUserId(req),
         name: body.name,
         location,
         logo,
-        latitude:
-          body.latitude != null && body.latitude !== ""
-            ? Number(body.latitude)
-            : undefined,
-        longitude:
-          body.longitude != null && body.longitude !== ""
-            ? Number(body.longitude)
-            : undefined,
-        deliveryAreaRadius:
-          body.deliveryAreaRadius != null && body.deliveryAreaRadius !== ""
-            ? Number(body.deliveryAreaRadius)
-            : undefined,
+        latitude: body.latitude,
+        longitude: body.longitude,
+        deliveryAreaRadius: body.deliveryAreaRadius,
       });
       res.json({ message: "Restaurant updated successfully" });
     } catch (e) {
+      if (e instanceof AppError) {
+        next(e);
+        return;
+      }
       const err = e as Error;
       if (err.message?.includes("Not the owner")) {
         next(new AppError({ code: "FORBIDDEN", status: 403, message: err.message, expose: true, cause: e }));
