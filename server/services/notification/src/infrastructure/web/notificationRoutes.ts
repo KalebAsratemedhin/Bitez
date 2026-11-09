@@ -1,5 +1,5 @@
 import express from "express";
-import { isAuthenticated } from "./middlewares/auth.js";
+import { isAuthenticated } from "@bitez/shared";
 import type { NotificationController } from "../controllers/NotificationController.js";
 
 export function createNotificationRoutes(controller: NotificationController): express.Router {

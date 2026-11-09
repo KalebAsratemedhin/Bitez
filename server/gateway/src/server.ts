@@ -2,7 +2,7 @@ import express from "express";
 import morgan from "morgan";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import cors from "cors";
-import { createLogger } from "./logger.js";
+import { createLogger } from "@bitez/shared";
 
 const SERVICE_NAME = "gateway";
 const logger = createLogger({ serviceName: SERVICE_NAME });

@@ -1,17 +1,31 @@
 import type { Request, Response, NextFunction } from "express";
 
 import type { AuthUseCase } from "../../application/usecases/AuthUseCase.js";
-import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
-import { AppError } from "@bitez/shared";
+import {
+  AppError,
+  parseBody,
+  type AuthenticatedRequest,
+} from "@bitez/shared";
+import {
+  signupBodySchema,
+  signinBodySchema,
+  updateProfileBodySchema,
+  tokenRevokedBodySchema,
+} from "../../application/validation/auth.schemas.js";
 
 export class AuthController {
   constructor(private readonly authUseCase: AuthUseCase) {}
 
   signup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await this.authUseCase.signup(req.body);
+      const body = parseBody(signupBodySchema, req.body);
+      const result = await this.authUseCase.signup(body);
       res.status(201).json(result);
     } catch (e) {
+      if (e instanceof AppError) {
+        next(e);
+        return;
+      }
       const message = (e as Error).message ?? "Invalid request";
       next(new AppError({ code: "BAD_REQUEST", status: 400, message, expose: true, cause: e }));
     }
@@ -19,9 +33,14 @@ export class AuthController {
 
   signin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await this.authUseCase.signin(req.body);
+      const body = parseBody(signinBodySchema, req.body);
+      const result = await this.authUseCase.signin(body);
       res.json(result);
     } catch (e) {
+      if (e instanceof AppError) {
+        next(e);
+        return;
+      }
       const message = (e as Error).message ?? "Invalid credentials";
       next(new AppError({ code: "UNAUTHORIZED", status: 401, message, expose: true, cause: e }));
     }
@@ -53,6 +72,17 @@ export class AuthController {
     }
   };
 
+  /** Internal: whether a bearer token was logged out (blacklist). */
+  isTokenRevoked = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { token } = parseBody(tokenRevokedBodySchema, req.body);
+      const revoked = await this.authUseCase.isTokenRevoked(token);
+      res.status(200).json({ revoked });
+    } catch (e) {
+      next(e);
+    }
+  };
+
   /** Internal: get minimal user by id for service-to-service (e.g. order/delivery enrichment). */
   getInternalUserById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -75,15 +105,14 @@ export class AuthController {
   updateProfile = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user!.id;
-      const body = req.body as { name?: string; email?: string; phoneNumber?: string; address?: string };
-      const user = await this.authUseCase.updateProfile(userId, {
-        name: body.name,
-        email: body.email,
-        phoneNumber: body.phoneNumber,
-        address: body.address,
-      });
+      const body = parseBody(updateProfileBodySchema, req.body);
+      const user = await this.authUseCase.updateProfile(userId, body);
       res.status(200).json(user);
     } catch (e) {
+      if (e instanceof AppError) {
+        next(e);
+        return;
+      }
       const message = (e as Error).message;
       if (message === "User not found") {
         next(new AppError({ code: "NOT_FOUND", status: 404, message, expose: true, cause: e }));

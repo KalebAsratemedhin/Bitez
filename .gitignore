@@ -17,5 +17,7 @@ backend/.env.*
 **/.venv
 .cursor/
 node_modules/
+**/dist/
+practices/
 
 docs/

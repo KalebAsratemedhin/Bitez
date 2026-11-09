@@ -1,9 +1,17 @@
 import "dotenv/config";
 import express from "express";
 import morgan from "morgan";
-import { createLogger } from "./logger.js";
+import {
+  requestContextMiddleware,
+  createErrorHandler,
+  mountMetricsRoute,
+  createLogger,
+  configureJwtAuth,
+  assertProductionSecrets,
+  resolveJwtSecret,
+  resolveRabbitMqUrl,
+} from "@bitez/shared";
 import connectDB from "./infrastructure/config/db.js";
-import { requestContextMiddleware, createErrorHandler, mountMetricsRoute } from "@bitez/shared";
 import { AuthUseCase } from "./application/usecases/AuthUseCase.js";
 import { AuthController } from "./infrastructure/controllers/AuthController.js";
 import { UserRepository } from "./infrastructure/repositories/UserRepository.js";
@@ -13,9 +21,17 @@ import { TokenService } from "./infrastructure/services/TokenService.js";
 import { RabbitMQEventPublisher } from "./infrastructure/messaging/RabbitMQEventPublisher.js";
 import { createAuthRoutes } from "./infrastructure/web/authRoutes.js";
 
+assertProductionSecrets();
+
 const SERVICE_NAME = "auth";
 const logger = createLogger({ serviceName: SERVICE_NAME });
 const app = express();
+
+const blacklistedTokenRepository = new BlacklistedTokenRepository();
+configureJwtAuth({
+  getSecret: resolveJwtSecret,
+  isTokenRevoked: (token) => blacklistedTokenRepository.exists(token),
+});
 
 app.use(requestContextMiddleware);
 morgan.token("requestId", (req) => (req as { context?: { requestId?: string } }).context?.requestId ?? "-");
@@ -25,14 +41,11 @@ app.use(express.json());
 const PORT = Number(process.env.PORT) || 3001;
 
 const userRepository = new UserRepository();
-const blacklistedTokenRepository = new BlacklistedTokenRepository();
 const deliveryPersonRepository = new HttpDeliveryPersonRepository(
   process.env.DELIVERY_SERVICE_URL || "http://delivery:3004",
 );
-const tokenService = new TokenService(process.env.JWT_SECRET || "dev-secret");
-const eventPublisher = new RabbitMQEventPublisher(
-  process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672",
-);
+const tokenService = new TokenService(resolveJwtSecret());
+const eventPublisher = new RabbitMQEventPublisher(resolveRabbitMqUrl());
 
 const authUseCase = new AuthUseCase({
   userRepository,
@@ -58,4 +71,7 @@ async function start() {
   logger.info({ port: PORT }, "Auth service started");
 }
 
-start().catch(() => process.exit(1));
+start().catch((err) => {
+  logger.error({ err }, "Auth service failed to start");
+  process.exit(1);
+});

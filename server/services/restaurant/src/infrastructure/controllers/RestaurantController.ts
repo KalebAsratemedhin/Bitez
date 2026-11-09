@@ -3,7 +3,7 @@ import type { RestaurantUseCase } from "../../application/usecases/RestaurantUse
 import type { RatingRepository } from "../repositories/RatingRepository.js";
 import type { MenuRepository } from "../repositories/MenuRepository.js";
 import type { CloudinaryService } from "../services/CloudinaryService.js";
-import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
+import type { AuthenticatedRequest } from "@bitez/shared";
 import { AppError } from "@bitez/shared";
 
 function getUserId(req: AuthenticatedRequest): string {

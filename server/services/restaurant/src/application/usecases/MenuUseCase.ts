@@ -3,17 +3,17 @@ import type {
   MenuItemInput,
   CreateMenuData,
   UpdateMenuData,
-} from "@domain/interfaces/MenuRepository.js";
-import type { IRestaurantRepository } from "@domain/interfaces/index.js";
-import type { Restaurant } from "@domain/entities/Restaurant.js";
-import type { Menu } from "@domain/entities/Menu.js";
+} from "../../domain/interfaces/MenuRepository.js";
+import type { IRestaurantRepository } from "../../domain/interfaces/index.js";
+import type { Restaurant } from "../../domain/entities/Restaurant.js";
+import type { Menu } from "../../domain/entities/Menu.js";
 import type {
   CreateMenuInput,
   UpdateMenuInput,
   GetMenuByRestaurantInput,
   GetMenuByIdInput,
   DeleteMenuInput,
-} from "@application/dto/menu.dto.js";
+} from "../dto/menu.dto.js";
 
 export interface MenuUseCaseDeps {
   menuRepository: IMenuRepository;

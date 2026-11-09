@@ -1,4 +1,4 @@
-import type { Menu, MenuItem } from "@domain/entities/Menu.js";
+import type { Menu, MenuItem } from "../entities/Menu.js";
 
 export interface MenuItemInput {
   name: string;

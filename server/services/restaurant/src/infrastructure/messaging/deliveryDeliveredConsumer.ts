@@ -1,6 +1,6 @@
 import type { Channel, ConsumeMessage } from "amqplib";
-import type { Logger } from "../../logger.js";
-import type { IDeliveredToRepository } from "@domain/interfaces/DeliveredToRepository.js";
+import type { Logger } from "@bitez/shared";
+import type { IDeliveredToRepository } from "../../domain/interfaces/DeliveredToRepository.js";
 import { runAmqpConsumerLoop } from "@bitez/shared";
 
 const EXCHANGE = "bitez";

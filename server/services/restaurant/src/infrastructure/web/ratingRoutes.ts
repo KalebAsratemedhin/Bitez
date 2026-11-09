@@ -3,8 +3,7 @@ import type { RestaurantController } from "../controllers/RestaurantController.j
 import type { RatingRepository } from "../repositories/RatingRepository.js";
 import type { IEventPublisher } from "../../domain/interfaces/EventPublisher.js";
 import type { IDeliveredToRepository } from "../../domain/interfaces/DeliveredToRepository.js";
-import { isAuthenticated, optionalAuth } from "./middlewares/auth.js";
-import type { AuthenticatedRequest } from "./middlewares/auth.js";
+import { isAuthenticated, optionalAuth, type AuthenticatedRequest } from "@bitez/shared";
 
 export function createRatingRoutes(
   restaurantController: RestaurantController,

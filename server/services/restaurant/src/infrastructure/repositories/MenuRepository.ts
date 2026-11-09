@@ -6,8 +6,8 @@ import type {
   CreateMenuData,
   UpdateMenuData,
   MenuItemWithRestaurant,
-} from "@domain/interfaces/MenuRepository.js";
-import type { Menu as MenuEntity, MenuItem } from "@domain/entities/Menu.js";
+} from "../../domain/interfaces/MenuRepository.js";
+import type { Menu as MenuEntity, MenuItem } from "../../domain/entities/Menu.js";
 
 function toMenuItem(item: Record<string, unknown>): MenuItem {
   return {

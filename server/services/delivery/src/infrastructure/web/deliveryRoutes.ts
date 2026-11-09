@@ -1,5 +1,5 @@
 import express from "express";
-import { isAuthenticated, isAdmin, isDeliveryPerson } from "./middlewares/auth.js";
+import { isAuthenticated, isAdmin, isDeliveryPerson } from "@bitez/shared";
 import { requireInternalServiceToken } from "@bitez/shared";
 import type { DeliveryController } from "../controllers/DeliveryController.js";
 

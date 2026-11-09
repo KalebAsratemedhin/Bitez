@@ -1,4 +1,4 @@
-import { CreateRestaurantInput } from "@application/dto/restaurant.dto.js";
+import type { CreateRestaurantInput } from "../../application/dto/restaurant.dto.js";
 import type { Restaurant, PaginatedRestaurants } from "../entities/Restaurant.js";
 
 export interface IRestaurantRepository {

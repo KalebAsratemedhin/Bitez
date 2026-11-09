@@ -1,9 +1,6 @@
 import mongoose from "mongoose";
+import { resolveMongoUri } from "@bitez/shared";
 
 export default async function connectDB(): Promise<void> {
-  const uri =
-    process.env.MONGODB_URI ||
-    process.env.MONGO_URI ||
-    "mongodb://localhost:27017/bitez_default";
-  await mongoose.connect(uri);
+  await mongoose.connect(resolveMongoUri("bitez_auth"));
 }

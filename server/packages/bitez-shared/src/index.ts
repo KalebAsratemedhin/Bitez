@@ -5,3 +5,7 @@ export * from "./internalAuth.js";
 export * from "./amqpRetryLoop.js";
 export * from "./reconnectingBitezPublisher.js";
 export * from "./metrics.js";
+export * from "./logger.js";
+export * from "./env.js";
+export * from "./jwtAuth.js";
+export * from "./validate.js";

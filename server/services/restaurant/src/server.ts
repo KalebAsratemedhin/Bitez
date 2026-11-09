@@ -1,11 +1,20 @@
 import "dotenv/config";
+import {
+  createLogger,
+  requestContextMiddleware,
+  createErrorHandler,
+  mountMetricsRoute,
+  configureJwtAuth,
+  createHttpTokenRevocationCheck,
+  assertProductionSecrets,
+  resolveJwtSecret,
+  resolveRabbitMqUrl,
+} from "@bitez/shared";
 import express from "express";
 import morgan from "morgan";
 import path from "path";
 
-import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
-import { requestContextMiddleware, createErrorHandler, mountMetricsRoute } from "@bitez/shared";
 import { RestaurantUseCase } from "./application/usecases/RestaurantUseCase.js";
 import { MenuUseCase } from "./application/usecases/MenuUseCase.js";
 import { RestaurantController } from "./infrastructure/controllers/RestaurantController.js";
@@ -20,6 +29,15 @@ import { createRatingRoutes } from "./infrastructure/web/ratingRoutes.js";
 import { RabbitMQEventPublisher } from "./infrastructure/messaging/RabbitMQEventPublisher.js";
 import { startDeliveryDeliveredConsumer } from "./infrastructure/messaging/deliveryDeliveredConsumer.js";
 import { CloudinaryService } from "./infrastructure/services/CloudinaryService.js";
+
+
+assertProductionSecrets();
+configureJwtAuth({
+  getSecret: resolveJwtSecret,
+  isTokenRevoked: createHttpTokenRevocationCheck(
+    process.env.AUTH_SERVICE_URL || "http://auth:3001",
+  ),
+});
 
 const app = express();
 app.use(requestContextMiddleware);
@@ -36,9 +54,9 @@ const menuRepository = new MenuRepository();
 const ratingRepository = new RatingRepository();
 const deliveredToRepository = new DeliveredToRepository();
 const eventPublisher = new RabbitMQEventPublisher(
-  process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672",
+  resolveRabbitMqUrl(),
 );
-const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
+const rabbitUrl = resolveRabbitMqUrl();
 const cloudinary = new CloudinaryService({
   cloudName: process.env.CLOUDINARY_CLOUD_NAME ?? "",
   apiKey: process.env.CLOUDINARY_API_KEY ?? "",

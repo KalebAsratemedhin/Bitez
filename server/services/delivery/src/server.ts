@@ -1,9 +1,18 @@
 import "dotenv/config";
+import {
+  createLogger,
+  requestContextMiddleware,
+  createErrorHandler,
+  mountMetricsRoute,
+  configureJwtAuth,
+  createHttpTokenRevocationCheck,
+  assertProductionSecrets,
+  resolveJwtSecret,
+  resolveRabbitMqUrl,
+} from "@bitez/shared";
 import express from "express";
 import morgan from "morgan";
-import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
-import { requestContextMiddleware, createErrorHandler, mountMetricsRoute } from "@bitez/shared";
 import { DeliveryRepository } from "./infrastructure/repositories/DeliveryRepository.js";
 import { DeliveryPersonRepository } from "./infrastructure/repositories/DeliveryPersonRepository.js";
 import { DeliveryUseCase } from "./application/usecases/DeliveryUseCase.js";
@@ -18,6 +27,15 @@ import { startOrderEventConsumer } from "./infrastructure/messaging/orderEventCo
 import { UnassignedOrderRepository } from "./infrastructure/repositories/UnassignedOrderRepository.js";
 import { OrderReadModelRepository } from "./infrastructure/repositories/OrderReadModelRepository.js";
 import { UserReadModelRepository } from "./infrastructure/repositories/UserReadModelRepository.js";
+
+assertProductionSecrets();
+configureJwtAuth({
+  getSecret: resolveJwtSecret,
+  isTokenRevoked: createHttpTokenRevocationCheck(
+    process.env.AUTH_SERVICE_URL || "http://auth:3001",
+  ),
+});
+
 const SERVICE_NAME = "delivery";
 const logger = createLogger({ serviceName: SERVICE_NAME });
 
@@ -47,7 +65,7 @@ async function start() {
   const orderReadModelRepository = new OrderReadModelRepository();
   const userReadModelRepository = new UserReadModelRepository();
   const eventPublisher = new RabbitMQEventPublisher(
-    process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672",
+    resolveRabbitMqUrl(),
   );
   
   const notificationService = new EventNotificationService(eventPublisher);
@@ -109,7 +127,7 @@ async function start() {
   app.listen(PORT, "0.0.0.0");
   logger.info({ port: PORT }, "Delivery service started");
 
-  const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
+  const rabbitUrl = resolveRabbitMqUrl();
   const amqpOpts = { signal: amqpShutdown.signal };
   startOrderEventConsumer(rabbitUrl, orderReadModelRepository, logger, amqpOpts).catch((err) =>
     logger.error({ err }, "order event consumer failed")

@@ -1,5 +1,5 @@
 import express from "express";
-import { isAuthenticated, isAdmin, isRestaurantOwner } from "./middlewares/auth.js";
+import { isAuthenticated, isAdmin, isRestaurantOwner } from "@bitez/shared";
 import { requireInternalServiceToken } from "@bitez/shared";
 import type { OrderController } from "../controllers/OrderController.js";
 

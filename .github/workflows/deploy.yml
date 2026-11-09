@@ -22,7 +22,7 @@ jobs:
       matrix:
         image:
           - name: gateway
-            context: server/gateway
+            context: server
             dockerfile: server/gateway/Dockerfile
           - name: auth
             context: server

@@ -1,14 +1,32 @@
 import "dotenv/config";
+import {
+  createLogger,
+  requestContextMiddleware,
+  createErrorHandler,
+  mountMetricsRoute,
+  configureJwtAuth,
+  createHttpTokenRevocationCheck,
+  assertProductionSecrets,
+  resolveJwtSecret,
+  resolveRabbitMqUrl,
+} from "@bitez/shared";
 import express from "express";
 import morgan from "morgan";
-import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
-import { requestContextMiddleware, createErrorHandler, mountMetricsRoute } from "@bitez/shared";
 import { createDashboardReadModelsAdapter } from "./infrastructure/repositories/DashboardReadModelsAdapter.js";
 import { DashboardUseCase } from "./application/usecases/DashboardUseCase.js";
 import { DashboardController } from "./infrastructure/controllers/DashboardController.js";
 import { createDashboardRoutes } from "./infrastructure/web/dashboardRoutes.js";
 import { startDashboardEventConsumers } from "./infrastructure/messaging/dashboardEventConsumers.js";
+
+
+assertProductionSecrets();
+configureJwtAuth({
+  getSecret: resolveJwtSecret,
+  isTokenRevoked: createHttpTokenRevocationCheck(
+    process.env.AUTH_SERVICE_URL || "http://auth:3001",
+  ),
+});
 
 const SERVICE_NAME = "dashboard";
 const logger = createLogger({ serviceName: SERVICE_NAME });
@@ -41,7 +59,7 @@ async function start() {
   app.listen(PORT, "0.0.0.0");
   logger.info({ port: PORT }, "Dashboard service started");
 
-  const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
+  const rabbitUrl = resolveRabbitMqUrl();
   startDashboardEventConsumers(rabbitUrl, logger, { signal: amqpShutdown.signal }).catch((err) =>
     logger.error({ err }, "dashboard event consumers failed")
   );

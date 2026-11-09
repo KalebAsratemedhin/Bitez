@@ -1,9 +1,18 @@
 import "dotenv/config";
+import {
+  createLogger,
+  requestContextMiddleware,
+  createErrorHandler,
+  mountMetricsRoute,
+  configureJwtAuth,
+  createHttpTokenRevocationCheck,
+  assertProductionSecrets,
+  resolveJwtSecret,
+  resolveRabbitMqUrl,
+} from "@bitez/shared";
 import express from "express";
 import morgan from "morgan";
-import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
-import { requestContextMiddleware, createErrorHandler, mountMetricsRoute } from "@bitez/shared";
 import { OrderRepository } from "./infrastructure/repositories/OrderRepository.js";
 import { OrderUseCase } from "./application/usecases/OrderUseCase.js";
 import { OrderController } from "./infrastructure/controllers/OrderController.js";
@@ -19,6 +28,15 @@ import { startRestaurantEventConsumer } from "./infrastructure/messaging/restaur
 import { startUserRegisteredConsumer } from "./infrastructure/messaging/userRegisteredConsumer.js";
 import { RestaurantReadModelRepository } from "./infrastructure/repositories/RestaurantReadModelRepository.js";
 import { UserReadModelRepository } from "./infrastructure/repositories/UserReadModelRepository.js";
+
+
+assertProductionSecrets();
+configureJwtAuth({
+  getSecret: resolveJwtSecret,
+  isTokenRevoked: createHttpTokenRevocationCheck(
+    process.env.AUTH_SERVICE_URL || "http://auth:3001",
+  ),
+});
 
 const SERVICE_NAME = "order";
 const logger = createLogger({ serviceName: SERVICE_NAME });
@@ -50,14 +68,14 @@ async function start() {
   const restaurantReadModelRepository = new RestaurantReadModelRepository();
   const userReadModelRepository = new UserReadModelRepository();
   const eventPublisher = new RabbitMQEventPublisher(
-    process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672",
+    resolveRabbitMqUrl(),
   );
   const notificationService = new EventNotificationService(eventPublisher);
   const userRepository = new HttpUserRepository(
     process.env.AUTH_SERVICE_URL || "http://auth:3001",
   );
 
-  const tokenService = new TokenService(process.env.JWT_SECRET || "dev-secret");
+  const tokenService = new TokenService(resolveJwtSecret());
   const paymentGateway = new ChapaPaymentGateway(process.env.CHAPA_AUTH || "");
   const authBase = (process.env.AUTH_SERVICE_URL || "http://auth:3001").replace(/\/$/, "");
   const getCustomerById = async (id: string) => {
@@ -96,7 +114,7 @@ async function start() {
   app.listen(PORT, "0.0.0.0");
   logger.info({ port: PORT }, "Order service started");
 
-  const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
+  const rabbitUrl = resolveRabbitMqUrl();
   const amqpOpts = { signal: amqpShutdown.signal };
   startRestaurantEventConsumer(rabbitUrl, restaurantReadModelRepository, logger, amqpOpts).catch((err) =>
     logger.error({ err }, "restaurant event consumer failed")

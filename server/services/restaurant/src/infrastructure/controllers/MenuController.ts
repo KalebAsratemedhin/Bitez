@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { MenuUseCase } from "../../application/usecases/MenuUseCase.js";
 import type { CloudinaryService } from "../services/CloudinaryService.js";
-import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
+import type { AuthenticatedRequest } from "@bitez/shared";
 import { AppError } from "@bitez/shared";
 
 function getUserId(req: AuthenticatedRequest): string {

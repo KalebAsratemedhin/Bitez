@@ -1,8 +1,7 @@
 import express from "express";
 import multer from "multer";
 
-import { isAuthenticated } from "./middlewares/auth.js";
-import { requireInternalServiceToken } from "@bitez/shared";
+import { isAuthenticated, requireInternalServiceToken } from "@bitez/shared";
 import type { AuthController } from "../controllers/AuthController.js";
 
 const upload = multer();
@@ -14,6 +13,7 @@ export function createAuthRoutes(controller: AuthController): express.Router {
   router.post("/logout", isAuthenticated, controller.logout);
   router.get("/current-user", isAuthenticated, controller.getCurrentUser);
   router.get("/internal/user/:id", requireInternalServiceToken, controller.getInternalUserById);
+  router.post("/internal/token/revoked", requireInternalServiceToken, controller.isTokenRevoked);
   router.put("/profile", isAuthenticated, upload.any(), controller.updateProfile);
   return router;
 }

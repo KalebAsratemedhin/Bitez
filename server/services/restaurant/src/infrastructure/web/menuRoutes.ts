@@ -1,6 +1,6 @@
 import express from "express";
 import multer from "multer";
-import { isAuthenticated } from "./middlewares/auth.js";
+import { isAuthenticated } from "@bitez/shared";
 import type { MenuController } from "../controllers/MenuController.js";
 
 const upload = multer({

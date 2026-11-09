@@ -1,5 +1,5 @@
 import express from "express";
-import { isAuthenticated, isDeliveryPerson } from "./middlewares/auth.js";
+import { isAuthenticated, isDeliveryPerson } from "@bitez/shared";
 import type { DashboardController } from "../controllers/DashboardController.js";
 
 export function createDashboardRoutes(controller: DashboardController): express.Router {

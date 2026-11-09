@@ -1,6 +1,6 @@
 import type { Response, NextFunction } from "express";
 import type { DashboardUseCase } from "../../application/usecases/DashboardUseCase.js";
-import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
+import type { AuthenticatedRequest } from "@bitez/shared";
 
 export class DashboardController {
   constructor(private readonly dashboardUseCase: DashboardUseCase) {}

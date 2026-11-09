@@ -77,6 +77,10 @@ export class AuthUseCase {
     return { message: "logged out successfully" };
   }
 
+  async isTokenRevoked(token: string): Promise<boolean> {
+    return this.deps.blacklistedTokenRepository.exists(token);
+  }
+
   async getCurrentUser(input: GetCurrentUserInput): Promise<unknown> {
     const user = await this.deps.userRepository.findById(input.userId, { excludePassword: true });
     if (!user) throw new Error("User not found");

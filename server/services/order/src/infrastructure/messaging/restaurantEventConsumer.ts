@@ -1,5 +1,5 @@
 import type { Channel, ConsumeMessage } from "amqplib";
-import type { Logger } from "../../logger.js";
+import type { Logger } from "@bitez/shared";
 import type { IRestaurantReadModelRepository } from "../../domain/interfaces/RestaurantReadModelRepository.js";
 import { runAmqpConsumerLoop } from "@bitez/shared";
 

@@ -1,14 +1,32 @@
 import "dotenv/config";
+import {
+  createLogger,
+  requestContextMiddleware,
+  createErrorHandler,
+  mountMetricsRoute,
+  configureJwtAuth,
+  createHttpTokenRevocationCheck,
+  assertProductionSecrets,
+  resolveJwtSecret,
+  resolveRabbitMqUrl,
+} from "@bitez/shared";
 import express from "express";
 import morgan from "morgan";
-import { createLogger } from "./logger.js";
 import connectDB from "./infrastructure/config/db.js";
-import { requestContextMiddleware, createErrorHandler, mountMetricsRoute } from "@bitez/shared";
 import { NotificationRepository } from "./infrastructure/repositories/NotificationRepository.js";
 import { NotificationUseCase } from "./application/usecases/NotificationUseCase.js";
 import { NotificationController } from "./infrastructure/controllers/NotificationController.js";
 import { createNotificationRoutes } from "./infrastructure/web/notificationRoutes.js";
 import { startNotificationRequestedConsumer } from "./infrastructure/messaging/notificationRequestedConsumer.js";
+
+
+assertProductionSecrets();
+configureJwtAuth({
+  getSecret: resolveJwtSecret,
+  isTokenRevoked: createHttpTokenRevocationCheck(
+    process.env.AUTH_SERVICE_URL || "http://auth:3001",
+  ),
+});
 
 const SERVICE_NAME = "notification";
 const logger = createLogger({ serviceName: SERVICE_NAME });
@@ -41,7 +59,7 @@ async function start() {
   app.listen(PORT, "0.0.0.0");
   logger.info({ port: PORT }, "Notification service started");
 
-  const rabbitUrl = process.env.RABBITMQ_URL || "amqp://guest:guest@localhost:5672";
+  const rabbitUrl = resolveRabbitMqUrl();
   startNotificationRequestedConsumer(rabbitUrl, notificationUseCase, logger, {
     signal: amqpShutdown.signal,
   }).catch((err) => logger.error({ err }, "notification requested consumer failed"));

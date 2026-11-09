@@ -1,7 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import type { OrderUseCase } from "../../application/usecases/OrderUseCase.js";
-import type { AuthenticatedRequest } from "../web/middlewares/auth.js";
-import { AppError } from "@bitez/shared";
+import { AppError, parseBody, type AuthenticatedRequest } from "@bitez/shared";
+import {
+  createOrderBodySchema,
+  updateOrderStatusBodySchema,
+  payForOrderBodySchema,
+} from "../../application/validation/order.schemas.js";
 
 function getUserId(req: AuthenticatedRequest): string {
   return req.user!.id;
@@ -38,12 +42,24 @@ export class OrderController {
 
   createOrder = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
+      const body = parseBody(createOrderBodySchema, req.body);
       const order = await this.orderUseCase.createOrder({
-        ...req.body,
+        restaurantID: body.restaurantID,
+        orderDetails: body.orderDetails.map((d) => ({
+          item: d.item,
+          quantity: d.quantity,
+        })) as { item: unknown; quantity: number }[],
+        totalAmount: body.totalAmount,
+        deliveryAddress: body.deliveryAddress,
+        coordinates: body.coordinates,
         customerID: getUserId(req),
       });
       res.status(201).json({ success: true, message: "Order created successfully.", order });
     } catch (e) {
+      if (e instanceof AppError) {
+        next(e);
+        return;
+      }
       const message = (e as Error).message ?? "";
       if (message.includes("not active")) {
         next(new AppError({ code: "BAD_REQUEST", status: 400, message, expose: true, cause: e }));
@@ -56,13 +72,18 @@ export class OrderController {
   updateOrderStatus = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const id = String(req.params.id ?? "").split(",")[0];
+      const body = parseBody(updateOrderStatusBodySchema, req.body);
       const order = await this.orderUseCase.updateOrderStatus({
         orderId: id,
-        status: req.body.status,
+        status: body.status,
         userId: getUserId(req),
       });
       res.status(200).json({ success: true, order });
     } catch (e) {
+      if (e instanceof AppError) {
+        next(e);
+        return;
+      }
       const message = (e as Error).message ?? "";
       const status = orderErrorStatus(message);
       const code =
@@ -210,9 +231,10 @@ export class OrderController {
         next(new AppError({ code: "INTERNAL", status: 500, message: "SERVER_URL not configured", expose: false }));
         return;
       }
+      const body = parseBody(payForOrderBodySchema, req.body);
       const result = await this.orderUseCase.initializePayment({
-        orderId: req.body.orderId,
-        total: req.body.total,
+        orderId: body.orderId,
+        total: body.total,
         userId: getUserId(req),
         serverUrl: process.env.SERVER_URL,
         authHeader: getAuthHeader(req),

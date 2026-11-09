@@ -1,6 +1,7 @@
 FROM node:20 AS builder
 WORKDIR /app
 
+COPY tsconfig.base.json ./
 COPY packages/bitez-shared/package*.json packages/bitez-shared/
 COPY packages/bitez-shared/tsconfig.json packages/bitez-shared/
 COPY packages/bitez-shared/src packages/bitez-shared/src
